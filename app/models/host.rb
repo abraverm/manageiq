@@ -21,7 +21,9 @@ class Host < ApplicationRecord
     "kubevirt"        => "KubeVirt",
     "vmware"          => "VMware",
     "openstack_infra" => "OpenStack Infrastructure",
+    "openshift_infra" => "OpenShift Virtualization",
     "ibm_power_hmc"   => "IBM Power HMC",
+    "proxmox"         => "Proxmox VE",
     "unknown"         => "Unknown",
     nil               => "Unknown",
   }.freeze
@@ -95,7 +97,7 @@ class Host < ApplicationRecord
   # Physical server reference
   belongs_to :physical_server, :inverse_of => :host
 
-  serialize :settings, Hash
+  serialize :settings, :type => Hash
 
   deprecate_attribute :address,  :hostname, :type => :string
   alias_attribute     :state,    :power_state
@@ -115,13 +117,14 @@ class Host < ApplicationRecord
 
   virtual_column :os_image_name,                :type => :string,      :uses => [:operating_system, :hardware]
   virtual_column :platform,                     :type => :string,      :uses => [:operating_system, :hardware]
-  virtual_delegate :v_owning_cluster, :to => "ems_cluster.name", :allow_nil => true, :default => "", :type => :string
+  virtual_attribute :v_owning_cluster, :string, :through => :ems_cluster, :source => :name, :default => ""
   virtual_column :v_owning_datacenter,          :type => :string,      :uses => :all_relationships
   virtual_column :v_owning_folder,              :type => :string,      :uses => :all_relationships
-  virtual_delegate :cpu_total_cores, :cpu_cores_per_socket, :to => :hardware, :allow_nil => true, :default => 0, :type => :integer
-  virtual_delegate :num_cpu,     :to => "hardware.cpu_sockets",        :allow_nil => true, :default => 0, :type => :integer
-  virtual_delegate :total_vcpus, :to => "hardware.cpu_total_cores",    :allow_nil => true, :default => 0, :type => :integer
-  virtual_delegate :ram_size,    :to => "hardware.memory_mb",          :allow_nil => true, :default => 0, :type => :integer
+  virtual_attribute :cpu_total_cores, :integer, :through => :hardware, :source => :cpu_total_cores, :default => 0
+  virtual_attribute :cpu_cores_per_socket, :integer, :through => :hardware, :source => :cpu_cores_per_socket, :default => 0
+  virtual_attribute :num_cpu, :integer, :through => :hardware, :source => :cpu_sockets, :default => 0
+  virtual_attribute :total_vcpus, :integer, :through => :hardware, :source => :cpu_total_cores, :default => 0
+  virtual_attribute :ram_size, :integer, :through => :hardware, :source => :memory_mb, :default => 0
   virtual_column :enabled_inbound_ports,        :type => :numeric_set  # The following are not set to use anything
   virtual_column :enabled_outbound_ports,       :type => :numeric_set  # because get_ports ends up re-querying the
   virtual_column :enabled_udp_inbound_ports,    :type => :numeric_set  # database anyway.
@@ -137,7 +140,7 @@ class Host < ApplicationRecord
   virtual_column :enabled_run_level_4_services, :type => :string_set,  :uses => :host_services
   virtual_column :enabled_run_level_5_services, :type => :string_set,  :uses => :host_services
   virtual_column :enabled_run_level_6_services, :type => :string_set,  :uses => :host_services
-  virtual_delegate :annotation, :to => :hardware, :prefix => "v", :allow_nil => true, :type => :string
+  virtual_attribute :v_annotation, :string, :through => :hardware, :source => :annotation
   virtual_column :vmm_vendor_display,           :type => :string
   virtual_column :ipmi_enabled,                 :type => :boolean
   virtual_attribute :archived, :boolean, :arel => ->(t) { t.grouping(t[:ems_id].eq(nil)) }
@@ -165,7 +168,7 @@ class Host < ApplicationRecord
   self.default_relationship_type = "ems_metadata"
 
   include DriftStateMixin
-  virtual_delegate :last_scan_on, :to => "last_drift_state_timestamp_rec.timestamp", :allow_nil => true, :type => :datetime
+  virtual_attribute :last_scan_on, :datetime, :through => :last_drift_state_timestamp_rec, :source => :timestamp
 
   delegate :queue_name_for_ems_operations, :to => :ext_management_system, :allow_nil => true
 
@@ -197,18 +200,18 @@ class Host < ApplicationRecord
 
   # if you change this, please check in on VmWare#start
   supports :start do
-    if !supports?(:ipmi)
-      unsupported_reason(:ipmi)
-    elsif power_state != "off"
+    if power_state != "off"
       _("The Host is not in power state off")
+    else
+      unsupported_reason(:ipmi)
     end
   end
 
   supports :stop do
-    if !supports?(:ipmi)
-      unsupported_reason(:ipmi)
-    elsif power_state != "on"
+    if power_state != "on"
       _("The Host is not in powered on")
+    else
+      unsupported_reason(:ipmi)
     end
   end
 
@@ -616,6 +619,8 @@ class Host < ApplicationRecord
       :action => "Verify Host Credentials",
       :userid => userid
     }
+
+    encrypt_verify_credential_params!(options)
 
     queue_opts = {
       :args        => [auth_type, options],
@@ -1437,5 +1442,33 @@ class Host < ApplicationRecord
       _log.warn("Cannot #{description} because <#{reason}>")
     end
     !reason
+  end
+
+  private
+
+  # Ensure that any passwords are encrypted before putting them onto the queue for any
+  # DDF fields which are a password type
+  def encrypt_verify_credential_params!(options)
+    encrypted_columns = Authentication.encrypted_columns
+
+    traverse_hash(options) do |value, key_path|
+      value.slice(*encrypted_columns).each do |key, val|
+        options.store_path(key_path + [key], ManageIQ::Password.try_encrypt(val))
+      end
+    end
+  end
+
+  def traverse_hash(hash, path = [], &block)
+    hash.each do |key, val|
+      key_path = path << key
+
+      if val.kind_of?(Array)
+        val.each { |v| traverse_hash(v, key_path, &block)}
+      elsif val.kind_of?(Hash)
+        yield val, key_path
+
+        traverse_hash(val, key_path, &block)
+      end
+    end
   end
 end

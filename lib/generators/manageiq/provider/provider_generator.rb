@@ -11,7 +11,6 @@ module ManageIQ
         "configuration" => "ConfigurationManager",
         "container"     => "ContainerManager",
         "infra"         => "InfraManager",
-        "monitoring"    => "MonitoringManager",
         "network"       => "NetworkManager",
         "physical"      => "PhysicalInfraManager",
         "provisioning"  => "ProvisioningManager",
@@ -35,11 +34,44 @@ module ManageIQ
         "[#{match}, 'app:test:providers_common']"
       end
 
+      append_provider_agents_md
+
       create_scaffolding if options[:scaffolding]
       create_vcr         if options[:vcr]
     end
 
     private
+
+    def append_provider_agents_md
+      content = <<~AGENTS_MD
+
+        ## Provider architecture
+
+        For the full provider architecture guide (manager model, inventory pipeline,
+        workers, VCR cassettes) see:
+        `spec/manageiq/docs/agents/provider_plugins.md`
+      AGENTS_MD
+
+      if options[:scaffolding]
+        content += <<~AGENTS_MD
+
+          ### Class paths for this provider
+
+          | Class | Path |
+          |---|---|
+          | Manager | `app/models/#{plugin_path}/#{manager_path}.rb` |
+          | Refresher | `app/models/#{plugin_path}/#{manager_path}/refresher.rb` |
+          | RefreshWorker | `app/models/#{plugin_path}/#{manager_path}/refresh_worker.rb` |
+          | EventCatcher | `app/models/#{plugin_path}/#{manager_path}/event_catcher.rb` |
+          | MetricsCollectorWorker | `app/models/#{plugin_path}/#{manager_path}/metrics_collector_worker.rb` |
+          | Collector | `app/models/#{plugin_path}/inventory/collector/#{manager_path}.rb` |
+          | Parser | `app/models/#{plugin_path}/inventory/parser/#{manager_path}.rb` |
+          | Persister | `app/models/#{plugin_path}/inventory/persister/#{manager_path}.rb` |
+        AGENTS_MD
+      end
+
+      append_to_file "AGENTS.md", content
+    end
 
     # The short name of the provider
     #
@@ -107,13 +139,16 @@ module ManageIQ
     end
 
     def create_vcr
+      template "spec/config/secrets.defaults.yml"
+
       inject_into_file '.yamllint', "  /spec/vcr_cassettes/**\n", :after => "  /spec/manageiq/**\n"
 
       append_file 'spec/spec_helper.rb', <<~VCR
 
         VCR.configure do |config|
-          config.ignore_hosts 'codeclimate.com' if ENV['CI']
           config.cassette_library_dir = File.join(#{class_name}::Engine.root, 'spec/vcr_cassettes')
+
+          VcrSecrets.define_all_cassette_placeholders(config, :#{provider_name})
         end
       VCR
     end

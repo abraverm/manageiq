@@ -17,12 +17,13 @@ module DeprecationMixin
 
     def deprecate_attribute(old_attribute, new_attribute, type:)
       deprecate_attribute_methods(old_attribute, new_attribute)
-      virtual_attribute(old_attribute, type)
       hide_attribute(old_attribute)
     end
 
     def deprecate_attribute_methods(old_attribute, new_attribute)
-      alias_attribute old_attribute, new_attribute
+      define_method(old_attribute) { self.send(new_attribute) }
+      define_method("#{old_attribute}=") { |object| self.send("#{new_attribute}=", object) }
+      define_method("#{old_attribute}?") { self.send("#{new_attribute}?") }
       ["", "=", "?"].each { |suffix| Vmdb::Deprecation.deprecate_methods(self, "#{old_attribute}#{suffix}" => "#{new_attribute}#{suffix}") }
     end
   end

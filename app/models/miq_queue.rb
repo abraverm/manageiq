@@ -103,8 +103,8 @@ class MiqQueue < ApplicationRecord
 
   TIMEOUT = 10.minutes
 
-  serialize :args, Array
-  serialize :miq_callback, Hash
+  serialize :args, :type => Array
+  serialize :miq_callback, :type => Hash
 
   validate :validate_zone_name
 
@@ -667,7 +667,7 @@ class MiqQueue < ApplicationRecord
     )
 
     if result[:class_name].kind_of?(Class)
-      ActiveSupport::Deprecation.warn("Rails 5.1 dropped support for Class query values, use a String for class_name.", caller[1..-1])
+      Vmdb::Deprecation.warn("Rails 5.1 dropped support for Class query values, use a String for class_name.", caller[1..-1])
       result[:class_name] = result[:class_name].name
     end
     result

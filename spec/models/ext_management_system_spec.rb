@@ -38,11 +38,16 @@ RSpec.describe ExtManagementSystem do
     end
   end
 
-  it ".model_name_from_emstype" do
+  describe ".model_name_from_emstype" do
     described_class.concrete_subclasses.each do |klass|
-      expect(described_class.model_name_from_emstype(klass.ems_type)).to eq(klass.name)
+      it "has a model name for #{klass.ems_type}", :providers_common => true do
+        expect(described_class.model_name_from_emstype(klass.ems_type)).to eq(klass.name)
+      end
     end
-    expect(described_class.model_name_from_emstype('foo')).to be_nil
+
+    it "handles unknown model names" do
+      expect(described_class.model_name_from_emstype('foo')).to be_nil
+    end
   end
 
   describe ".types" do
@@ -323,15 +328,15 @@ RSpec.describe ExtManagementSystem do
     end
 
     it "refresh_all_ems_timer will refresh for all emses in zone1" do
+      EvmSpecHelper.local_miq_server(:is_master => true, :zone => @zone1)
       @ems1 = @zone1.ext_management_systems.first
-      allow(MiqServer).to receive(:my_server).and_return(@zone1.miq_servers.first)
       expect(described_class).to receive(:refresh_ems).with([@ems1.id], true)
       described_class.refresh_all_ems_timer
     end
 
     it "refresh_all_ems_timer will refresh for all emses in zone2" do
       @ems2 = @zone2.ext_management_systems.first
-      allow(MiqServer).to receive(:my_server).and_return(@zone2.miq_servers.first)
+      EvmSpecHelper.local_miq_server(:is_master => true, :zone => @zone2)
       expect(described_class).to receive(:refresh_ems).with([@ems2.id], true)
       described_class.refresh_all_ems_timer
     end
@@ -802,6 +807,14 @@ RSpec.describe ExtManagementSystem do
     it "detects security group for provider" do
       ems = FactoryBot.build(:ems_openstack_network)
       expect(ems.supports_create_security_group).to be(true)
+    end
+  end
+
+  describe "#image_name", :providers_common => true do
+    described_class.concrete_subclasses.each do |klass|
+      it "has a vendor asset for #{klass.ems_type}" do
+        expect(ActionController::Base.helpers.asset_path("svg/vendor-#{klass.new.image_name}.svg")).to_not be_blank
+      end
     end
   end
 end

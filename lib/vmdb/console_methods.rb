@@ -1,24 +1,7 @@
 module Vmdb
   module ConsoleMethods
-    def enable_console_sql_logging
-      ActiveRecord::Base.logger.level = 0
-    end
-
-    def disable_console_sql_logging
-      ActiveRecord::Base.logger.level = 1
-    end
-
-    def toggle_console_sql_logging
-      ActiveRecord::Base.logger.level == 0 ? disable_console_sql_logging : enable_console_sql_logging
-    end
-
-    def with_console_sql_logging_level(level)
-      old_level = ActiveRecord::Base.logger.level
-      ActiveRecord::Base.logger.level = level
-      yield
-    ensure
-      ActiveRecord::Base.logger.level = old_level
-    end
+    include LogLevelToggle
+    include SimulateQueueWorker
 
     def backtrace(include_external = false)
       caller.select { |path| include_external || path.start_with?(Rails.root.to_s) }
@@ -36,41 +19,6 @@ module Vmdb
 
       User.current_user = user
       set_translation_locale(user.settings[:display][:locale])
-    end
-
-    # Development helper method for Rails console for simulating queue workers.
-    def simulate_queue_worker(break_on_complete: false, quiet_polling: true)
-      raise NotImplementedError, "not implemented in production mode" if Rails.env.production?
-
-      deliver_on = MiqQueue.arel_table[:deliver_on]
-
-      stale_entries = MiqQueue.where(:state => MiqQueue::STATE_DEQUEUE).count
-      puts "NOTE: there are #{stale_entries} entries on the queue that are in progress" if stale_entries > 0
-
-      future_entries = MiqQueue.where(deliver_on.gt(1.minute.from_now)).count
-      puts "NOTE: there are #{future_entries} entries in the future" if future_entries > 0
-
-      loop do
-        q = with_console_sql_logging_level(quiet_polling ? 1 : ActiveRecord::Base.logger.level) do
-          MiqQueue.where.not(:state => MiqQueue::STATE_DEQUEUE)
-                  .where(deliver_on.eq(nil).or(deliver_on.lteq(Time.now.utc)))
-                  .where.not(:queue_name => "miq_server")
-                  .order(:priority, :id)
-                  .first
-        end
-        if q
-          begin
-            q.update!(:state => MiqQueue::STATE_DEQUEUE, :handler => MiqServer.my_server)
-          rescue ActiveRecord::StaleObjectError
-          else
-            puts "\e[33;1m\n** Delivering #{MiqQueue.format_full_log_msg(q)}\n\e[0;m"
-            q.deliver_and_process
-          end
-        else
-          break_on_complete ? break : sleep(1.second)
-        end
-        break if break_on_complete.kind_of?(Integer) && (break_on_complete -= 1) <= 0
-      end
     end
 
     # Helper method to set up a $evm variable for debugging purposes in Rails console
@@ -104,6 +52,33 @@ module Vmdb
 
       MiqServer.my_server.activate_roles(*role_names)
       MiqServer.my_server.active_role_names
+    end
+
+    def monitor_vmware
+      raise NotImplementedError, "not implemented in production mode" if Rails.env.production?
+
+      require 'VMwareWebService/MiqVim'
+      MiqVim.cacheScope = :cache_scope_core
+      MiqVim.monitor_updates = true
+    end
+
+    # when running rails s, automate can not find
+    # the api server. This sets it up
+    def enable_remote_ui
+      raise NotImplementedError, "not implemented in production mode" if Rails.env.production?
+
+      # essentially disabling the heartbeat since simulate_queue_worker doesn't keep this up to date
+      MiqServer.my_server.update(:last_heartbeat => 1.year.from_now)
+      return if MiqRegion.my_region.remote_ui_miq_server.present?
+
+      # ensure the ip address is setup
+      MiqServer.my_server.update(
+        :hostname                 => "localhost",
+        :ipaddress                => "127.0.0.1",
+        :has_active_userinterface => true
+      )
+
+      raise "remote ui url not set" unless MiqRegion.my_region.remote_ui_miq_server.present?
     end
   end
 end

@@ -49,11 +49,11 @@ class MiqUiWorker < MiqWorker
     super
 
     definition[:spec][:template][:spec][:containers].first[:volumeMounts] << {:name => "ui-httpd-configs", :mountPath => "/etc/httpd/conf.d"}
-    definition[:spec][:template][:spec][:volumes] << {:name => "ui-httpd-configs", :configMap => {:name => "ui-httpd-configs", :defaultMode => 420}}
+    definition[:spec][:template][:spec][:volumes] << {:name => "ui-httpd-configs", :configMap => {:name => "ui-httpd-configs", :defaultMode => 0o644}}
 
     if ENV["UI_SSL_SECRET_NAME"].present?
       definition[:spec][:template][:spec][:containers].first[:volumeMounts] << {:name => "ui-httpd-ssl", :mountPath => "/etc/pki/tls"}
-      definition[:spec][:template][:spec][:volumes] << {:name => "ui-httpd-ssl", :secret => {:secretName => ENV["UI_SSL_SECRET_NAME"], :items => [{:key => "ui_crt", :path => "certs/server.crt"}, {:key => "ui_key", :path => "private/server.key"}], :defaultMode => 400}}
+      definition[:spec][:template][:spec][:volumes] << {:name => "ui-httpd-ssl", :secret => {:secretName => ENV["UI_SSL_SECRET_NAME"], :items => [{:key => "ui_crt", :path => "certs/server.crt"}, {:key => "ui_key", :path => "private/server.key"}], :defaultMode => 0o440}}
     end
   end
 end

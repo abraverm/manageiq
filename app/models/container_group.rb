@@ -17,6 +17,10 @@ class ContainerGroup < ApplicationRecord
   has_many :containers, :dependent => :destroy
   has_many :container_images, -> { distinct }, :through => :containers
   belongs_to  :ext_management_system, :foreign_key => "ems_id"
+  has_many :annotations, -> { where(:section => "annotations") }, # rubocop:disable Rails/HasManyOrHasOneDependent
+           :class_name => "CustomAttribute",
+           :as         => :resource,
+           :inverse_of => :resource
   has_many :labels, -> { where(:section => "labels") }, # rubocop:disable Rails/HasManyOrHasOneDependent
            :class_name => "CustomAttribute",
            :as         => :resource,
@@ -40,6 +44,9 @@ class ContainerGroup < ApplicationRecord
   has_many :metric_rollups, :as => :resource
   has_many :vim_performance_states, :as => :resource
   delegate :my_zone, :to => :ext_management_system, :allow_nil => true
+
+  # Providers that can fetch pod logs must override this with `supports :logs`
+  supports_not :logs
 
   virtual_column :ready_condition_status, :type => :string, :uses => :container_conditions
   virtual_column :running_containers_summary, :type => :string
@@ -113,6 +120,35 @@ class ContainerGroup < ApplicationRecord
     self.container_build_pod_id = nil
     self.deleted_on = Time.now.utc
     save
+  end
+
+  def logs_queue(userid, options = {})
+    raise MiqException::Error, unsupported_reason(:logs) unless supports?(:logs)
+
+    task_opts = {
+      :action => "Fetching logs for Pod #{name}",
+      :userid => userid
+    }
+
+    queue_opts = {
+      :class_name  => self.class.name,
+      :instance_id => id,
+      :method_name => "logs",
+      :args        => [options],
+      :role        => "ems_operations",
+      :zone        => my_zone,
+      :queue_name  => ext_management_system.queue_name_for_ems_operations
+    }
+
+    MiqTask.generic_action_with_callback(task_opts, queue_opts)
+  end
+
+  def logs(options = {})
+    raw_logs(options)
+  end
+
+  def raw_logs(_options = {})
+    raise NotImplementedError, _("raw_logs must be implemented in a subclass")
   end
 
   def self.display_name(number = 1)

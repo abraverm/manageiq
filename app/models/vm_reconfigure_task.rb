@@ -1,9 +1,15 @@
 class VmReconfigureTask < MiqRequestTask
-  alias_attribute :vm, :source
-
   validate :validate_request_type, :validate_state
 
   AUTOMATE_DRIVES = false
+
+  def vm
+    source
+  end
+
+  def vm=(object)
+    self.source = object
+  end
 
   def self.base_model
     VmReconfigureTask
@@ -40,7 +46,7 @@ class VmReconfigureTask < MiqRequestTask
 
   def self.build_disk_message(options)
     if options[:disk_add].present?
-      disk_sizes = options[:disk_add].collect { |d| d["disk_size_in_mb"].to_i.megabytes.to_s(:human_size) + ", Type: " + d["type"].to_s }
+      disk_sizes = options[:disk_add].collect { |d| d["disk_size_in_mb"].to_i.megabytes.to_fs(:human_size) + ", Type: " + d["type"].to_s }
       "Add Disks: #{options[:disk_add].length} : #{disk_sizes.join(", ")} "
     end
   end

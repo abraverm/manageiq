@@ -51,13 +51,13 @@ RSpec.describe User do
   end
 
   describe "#change_password" do
-    let(:user) { FactoryBot.create(:user, :password => "smartvm") }
+    let(:user) { FactoryBot.create(:user) }
 
     it "should change user password" do
-      password    = user.password
-      newpassword = "newpassword"
-      user.change_password(password, newpassword)
-      expect(user.password).to eq(newpassword)
+      password     = "dummy"
+      new_password = "Tr0ub4dor&3"
+      user.change_password(password, new_password)
+      expect(user.authenticate_bcrypt(new_password)).to eq(user)
     end
 
     it "should raise an error when asked to change user password" do
@@ -175,7 +175,7 @@ RSpec.describe User do
   end
 
   describe '#fail_login!' do
-    let(:user) { FactoryBot.create(:user, :password => "smartvm", :failed_login_attempts => 0) }
+    let(:user) { FactoryBot.create(:user, :failed_login_attempts => 0) }
 
     it 'increases the number of failed login attempts' do
       user.fail_login!
@@ -212,65 +212,6 @@ RSpec.describe User do
       expect(MiqQueue.count).to eq(1)
       msg = MiqQueue.first
       expect(msg.deliver_on).to be_within(1.minute).of(1.week.from_now)
-    end
-  end
-
-  context "#authorize_ldap" do
-    before do
-      @fq_user = "thin1@manageiq.com"
-      @task = MiqTask.create(:name => "LDAP User Authorization of '#{@fq_user}'", :userid => @fq_user)
-      @auth_config =
-        {:authentication => {:ldapport => "389",
-                             :basedn => "dc=manageiq,dc=com",
-                             :follow_referrals => false,
-                             :get_direct_groups => true,
-                             :bind_dn => "evm_demo@manageiq.com",
-                             :mode => "ldap", :user_proxies => [{}],
-                             :user_type => "userprincipalname",
-                             :bind_pwd => "blah",
-                             :ldap_role => true,
-                             :user_suffix => "manageiq.com",
-                             :group_memberships_max_depth => 2,
-                             :ldaphost => ["192.168.254.15"]}
-        }
-      stub_settings(@auth_config)
-      @miq_ldap = double('miq_ldap')
-      allow(@miq_ldap).to receive_messages(:bind => false)
-
-      EvmSpecHelper.local_miq_server
-    end
-
-    it "will fail task if user object not found in ldap" do
-      allow(@miq_ldap).to receive_messages(:get_user_object => nil)
-
-      expect(AuditEvent).to receive(:failure).once
-      authenticate = Authenticator::Ldap.new(@auth_config[:authentication])
-      allow(authenticate).to receive_messages(:ldap => @miq_ldap)
-
-      expect(authenticate.authorize(@task.id, @fq_user)).to be_nil
-
-      @task.reload
-      expect(@task.state).to eq("Finished")
-      expect(@task.status).to eq("Error")
-      expect(@task.message).to match(/unable to find user object/)
-    end
-
-    it "will fail task if user group doesn't match an EVM role" do
-      allow(@miq_ldap).to receive_messages(:get_user_object => "user object")
-      allow(@miq_ldap).to receive_messages(:get_attr => nil)
-      allow(@miq_ldap).to receive_messages(:normalize => "a-username")
-
-      authenticate = Authenticator::Ldap.new(@auth_config[:authentication])
-      allow(authenticate).to receive_messages(:ldap => @miq_ldap)
-      allow(authenticate).to receive_messages(:groups_for => [])
-
-      expect(AuditEvent).to receive(:failure).once
-      expect(authenticate.authorize(@task.id, @fq_user)).to be_nil
-
-      @task.reload
-      expect(@task.state).to eq("Finished")
-      expect(@task.status).to eq("Error")
-      expect(@task.message).to match(/unable to match user's group membership/)
     end
   end
 
@@ -424,19 +365,20 @@ RSpec.describe User do
   end
 
   context ".authenticate_with_http_basic" do
-    let(:user) { FactoryBot.create(:user, :password => "dummy") }
+    let(:user) { FactoryBot.create(:user) }
+    let(:plaintext_password) { "dummy" }
 
     before do
       EvmSpecHelper.local_miq_server
     end
 
     it "should login with good username/password" do
-      expect(User.authenticate_with_http_basic(user.userid, user.password)).to eq([true, user.userid])
+      expect(User.authenticate_with_http_basic(user.userid, plaintext_password)).to eq([true, user.userid])
     end
 
     it "should fail with bad username" do
       bad_userid = "bad_userid"
-      expect(User.authenticate_with_http_basic(bad_userid, user.password)).to eq([false, bad_userid])
+      expect(User.authenticate_with_http_basic(bad_userid, plaintext_password)).to eq([false, bad_userid])
     end
 
     it "should fail with bad password" do
@@ -823,6 +765,53 @@ RSpec.describe User do
     it "throws 'abort' if reference to this user present in miq_requests table" do
       FactoryBot.create(:vm_migrate_request, :requester => user)
       expect { user.check_reference }.to throw_symbol(:abort)
+    end
+  end
+
+  describe "#link_to_session" do
+    let(:user) { FactoryBot.create(:user) }
+
+    it "handles Rack::Session::SessionId objects by extracting private_id" do
+      require 'rack/session/dalli'
+      session_id = Rack::Session::SessionId.new("test_session_id_123")
+      request = double("ActionDispatch::Request", :session_options => {:id => session_id})
+
+      expect { user.link_to_session(request) }.to change(Session, :count).by(1)
+      expect(user.sessions.last.session_id).to eq(session_id.private_id)
+    end
+
+    it "handles plain String session ids" do
+      request = double("ActionDispatch::Request", :session_options => {:id => "plain_session_id_456"})
+
+      expect { user.link_to_session(request) }.to change(Session, :count).by(1)
+      expect(user.sessions.last.session_id).to eq("plain_session_id_456")
+    end
+
+    it "does nothing when request is nil" do
+      expect { user.link_to_session(nil) }.not_to change(Session, :count)
+    end
+
+    it "does nothing when request has no session id" do
+      request = double("ActionDispatch::Request", :session_options => {})
+      expect { user.link_to_session(request) }.not_to change(Session, :count)
+    end
+  end
+
+  describe "#revoke_sessions" do
+    let(:user) { FactoryBot.create(:user) }
+
+    it "destroys user sessions and deletes user tokens across token caches" do
+      session = Session.create!(:session_id => "user_sess_1", :user_id => user.id)
+      token_store = TokenStore.acquire("test_api", 300)
+      token_store.create_user_token("user_tok_1", {:userid => user.userid}, {})
+
+      expect(token_store.read("user_tok_1")).to be_present
+      expect(user.sessions).to include(session)
+
+      user.revoke_sessions
+
+      expect(user.reload.sessions).to be_empty
+      expect(token_store.read("user_tok_1")).to be_nil
     end
   end
 end

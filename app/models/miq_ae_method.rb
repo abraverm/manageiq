@@ -9,7 +9,7 @@ class MiqAeMethod < ApplicationRecord
   # switch back to validates :exclusion once rails 6.1 issue is fixed
   # https://github.com/rails/rails/issues/41051
   validate :embedded_methods_not_nil
-  serialize :options, Hash
+  serialize :options, :type => Hash
   before_validation :set_relative_path
 
   belongs_to :domain, :class_name => "MiqAeDomain", :inverse_of => false
@@ -29,6 +29,12 @@ class MiqAeMethod < ApplicationRecord
   validates_inclusion_of  :location,  :in => AVAILABLE_LOCATIONS
   AVAILABLE_SCOPES     = ["class", "instance"]
   validates_inclusion_of  :scope,     :in => AVAILABLE_SCOPES
+
+  # finds by name or namespace. not domain
+  # @param [nil,String] search
+  scope :name_path_search, lambda { |search|
+    search.present? ? where(arel_table[:relative_path].matches("%#{search}%")) : where({})
+  }
 
   def self.available_languages
     AVAILABLE_LANGUAGES

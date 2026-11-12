@@ -44,43 +44,11 @@ class Vm < VmOrTemplate
     true
   end
 
-  def self.find_all_by_mac_address_and_hostname_and_ipaddress(mac_address, hostname, ipaddress)
-    return [] if mac_address.blank? && hostname.blank? && ipaddress.blank?
-
-    include = [:vm_or_template]
-    references = []
-    conds = [["hardwares.vm_or_template_id IS NOT NULL"]]
-    if mac_address
-      conds[0] << "guest_devices.address = ?"
-      conds << mac_address
-      include << :nics
-      references << :guest_devices
-    end
-    if hostname
-      conds[0] << "networks.hostname = ?"
-      conds << hostname
-      include << :networks
-      references << :networks
-    end
-    if ipaddress
-      conds[0] << "networks.ipaddress = ?"
-      conds << ipaddress
-      include << :networks
-      references << :networks
-    end
-    conds[0] = "(#{conds[0].join(" AND ")})"
-
-    Hardware.includes(include.uniq)
-            .references(references.uniq)
-            .where(conds)
-            .map(&:vm_or_template).select { |vm| vm.kind_of?(Vm) }
-  end
-
   def running_processes
     pl = {}
-    unless supports?(:collect_running_processes)
-      _log.warn(unsupported_reason(:collect_running_processes))
-      raise unsupported_reason(:collect_running_processes)
+    if (reason = unsupported_reason(:collect_running_processes))
+      _log.warn(reason)
+      raise reason
     end
 
     begin
@@ -118,9 +86,9 @@ class Vm < VmOrTemplate
 
   def supported_consoles
     {
-      :html5   => html5_support,
-      :vmrc    => vmrc_support,
-      :native  => native_support
+      :html5  => support_hash(:html5_console, :launch_html5_console),
+      :vmrc   => support_hash(:vmrc_console, :launch_vmrc_console),
+      :native => support_hash(:native_console, :launch_native_console)
     }
   end
 
@@ -144,27 +112,12 @@ class Vm < VmOrTemplate
 
   private
 
-  def html5_support
+  def support_hash(visible, launch)
+    reason = unsupported_reason(launch)
     {
-      :visible => supports?(:html5_console),
-      :enabled => supports?(:launch_html5_console),
-      :message => unsupported_reason(:launch_html5_console)
-    }
-  end
-
-  def vmrc_support
-    {
-      :visible => supports?(:vmrc_console),
-      :enabled => supports?(:launch_vmrc_console),
-      :message => unsupported_reason(:launch_vmrc_console)
-    }
-  end
-
-  def native_support
-    {
-      :visible => supports?(:native_console),
-      :enabled => supports?(:launch_native_console),
-      :message => unsupported_reason(:launch_native_console)
+      :visible => supports?(visible),
+      :enabled => !reason,
+      :message => reason
     }
   end
 

@@ -1915,12 +1915,6 @@
     :hidden: true
     :identifier: timeline_txt
 
-# RSS
-- :name: RSS
-  :description: Everything under RSS
-  :feature_type: node
-  :identifier: rss
-
 # Policy
 - :name: Control
   :description: Control
@@ -3284,16 +3278,6 @@
         :identifier: ops_diagnostics_server_control
         :hidden: true
         :children:
-        - :name: Collect All Logs
-          :description: Collect All Logs
-          :feature_type: control
-          :hidden: true
-          :identifier: collect_logs
-        - :name: Collect Current Logs
-          :description: Collect Current Logs
-          :feature_type: control
-          :hidden: true
-          :identifier: collect_current_logs
         - :name: Download Audit Log
           :description: Download Audit Log
           :feature_type: control
@@ -3309,11 +3293,6 @@
           :feature_type: control
           :hidden: true
           :identifier: fetch_production_log
-        - :name: Edit Log Depot Settings
-          :description: Edit Log Depot Settings
-          :feature_type: control
-          :hidden: true
-          :identifier: log_depot_edit
         - :name: Refresh Audit Log
           :description: Refresh Audit Log
           :feature_type: control
@@ -3415,26 +3394,11 @@
         :identifier: ops_diagnostics_zone_control
         :hidden: true
         :children:
-        - :name: Collect All Logs
-          :description: Collect All Logs
-          :feature_type: control
-          :hidden: true
-          :identifier: zone_collect_logs
-        - :name: Collect Current Logs
-          :description: Collect Current Logs
-          :feature_type: control
-          :hidden: true
-          :identifier: zone_collect_current_logs
         - :name: Delete Server
           :description: Delete Server
           :feature_type: control
           :hidden: true
           :identifier: zone_delete_server
-        - :name: Edit Log Depot Settings
-          :description: Edit Log Depot Settings
-          :feature_type: control
-          :hidden: true
-          :identifier: zone_log_depot_edit
         - :name: Start Role
           :description: Start Role
           :feature_type: control
@@ -3542,10 +3506,18 @@
         :description: Edit an PXE Image
         :feature_type: admin
         :identifier: pxe_image_edit
+      - :name: Edit PXE Image Tags
+        :description: Edit Tags of PXE Images
+        :feature_type: control
+        :identifier: pxe_image_tag
       - :name: Edit Windows Image
         :description: Edit an Windows Image
         :feature_type: admin
         :identifier: pxe_wimg_edit
+      - :name: Edit Windows Image Tags
+        :description: Edit Tags of Windows Images
+        :feature_type: control
+        :identifier: windows_image_tag
   # Customization Templates
   - :name: Customization Templates
     :description: Everything under Customization Templates
@@ -4519,6 +4491,10 @@
       :description: Show Capacity & Utilization data of Pods
       :feature_type: view
       :identifier: container_group_perf
+    - :name: Logs
+      :description: Logs of this Pod
+      :feature_type: control
+      :identifier: container_group_logs
   - :name: Operate
     :description: Perform Operations on Pods
     :feature_type: control
@@ -4536,7 +4512,14 @@
       :description: Check Compliance of Last Known Configuration
       :feature_type: control
       :identifier: container_group_check_compliance
-
+    - :name: Container Group Console
+      :description: Open a Console for this Container Group
+      :feature_type: control
+      :identifier: container_group_console
+    - :name: Kube Exec Console
+      :description: Access Kube Exec Console for Container Group
+      :feature_type: control
+      :identifier: container_group_kube_exec_console
 # ContainerNode
 - :name: Nodes
   :description: Everything under Container Nodes
@@ -4918,6 +4901,23 @@
       :description: Edit Tags of Container Projects
       :feature_type: control
       :identifier: container_project_tag
+  - :name: Modify
+    :description: Modify Container Projects
+    :feature_type: admin
+    :identifier: container_project_admin
+    :children:
+    - :name: Add
+      :description: Add a Container Project
+      :feature_type: admin
+      :identifier: container_project_new
+    - :name: Edit
+      :description: Edit a Container Project
+      :feature_type: admin
+      :identifier: container_project_edit
+    - :name: Remove
+      :description: Remove Container Projects
+      :feature_type: admin
+      :identifier: container_project_delete
 
 # Container
 - :name: Containers Explorer
@@ -5139,9 +5139,9 @@
       :feature_type: control
       :identifier: configured_system_console
 
-# Embedded Automation Manager
-- :name: Embedded Automation Manager
-  :description: Everything under Ansible
+# Embedded Automation Provider
+- :name: Embedded Automation Provider
+  :description: Everything under Automation Provider
   :feature_type: node
   :identifier: embedded_automation_manager
   :children:
@@ -5172,45 +5172,45 @@
         :feature_type: admin
         :identifier: embedded_configuration_script_source_delete
       - :name: Refresh Repositories
-        :description: Ansible Repositories Refresh
+        :description: Automation Provider Repositories Refresh
         :feature_type: control
         :identifier: embedded_configuration_script_source_refresh
       - :name: Edit Tags
-        :description: Edit Tags for the selected Ansible Repositories
+        :description: Edit Tags for the selected Automation Provider Repositories
         :feature_type: control
-        :identifier: ansible_repository_tag
-  - :name: Playbooks
-    :description: Everything under Playbooks
+        :identifier: embedded_configuration_script_source_tag
+  - :name: Configuration Scripts
+    :description: Everything under Configuration Scripts
     :feature_type: node
     :identifier: embedded_configuration_script_payload
     :children:
     - :name: View
-      :description: View Playbooks
+      :description: View Configuration Script Payloads
       :feature_type: view
       :identifier: embedded_configuration_script_payload_view
     - :name: Modify
-      :description: Modify Playbooks
+      :description: Modify Configuration Script Payloads
       :feature_type: admin
       :identifier: embedded_configuration_script_payload_admin
       :children:
-      - :name: Add Playbook
-        :description: Add a Playbook
+      - :name: Add Configuration Script
+        :description: Add a Configuration Script Payload
         :feature_type: admin
         :identifier: embedded_configuration_script_payload_add
-      - :name: Edit Playbook
-        :description: Edit a Playbook
+      - :name: Edit Configuration Script
+        :description: Edit a Configuration Script Payload
         :feature_type: admin
         :identifier: embedded_configuration_script_payload_edit
       - :name: Map Credentials
-        :description: Map Credentials to Workflow
+        :description: Map Credentials to Configuration Script Payloads
         :feature_type: admin
         :identifier: embedded_configuration_script_payload_map_credentials
-      - :name: Refresh Playbooks
-        :description: Ansible Playbooks Refresh
+      - :name: Refresh Configuration Script Payloads
+        :description: Configuration Script Payload Refresh
         :feature_type: control
         :identifier: embedded_configuration_script_payload_refresh
       - :name: Edit Tags
-        :description: Edit Tags for the selected Ansible Playbooks
+        :description: Edit Tags for the selected Configuration Script Payloads
         :feature_type: control
         :identifier: embedded_configuration_script_payload_tag
 
@@ -5241,15 +5241,15 @@
         :feature_type: admin
         :identifier: embedded_automation_manager_credentials_delete
       - :name: Refresh Credentials
-        :description: Ansible Credentials Refresh
+        :description: Credentials Refresh
         :feature_type: control
         :identifier: embedded_automation_manager_credentials_refresh
       - :name: Edit Tags
-        :description: Edit Tags for the selected Ansible Credentials
+        :description: Edit Tags for the selected Automation Provider Credentials
         :feature_type: control
-        :identifier: ansible_credential_tag
+        :identifier: embedded_automation_manager_credential_tag
 
-# Automation Manager
+# Automation Provider
 - :name: Ansible Tower
   :description: Everything under Providers
   :feature_type: node
@@ -6006,6 +6006,10 @@
           :description: Revert to selected snapshot on VMs
           :feature_type: control
           :identifier: vm_snapshot_revert
+        - :name: Rename Snapshot
+          :description: Rename a snapshot for VMs
+          :feature_type: control
+          :identifier: vm_snapshot_rename
 
   # Templates access rules
   - :name: Template Access Rules

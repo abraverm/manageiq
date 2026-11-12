@@ -46,7 +46,7 @@ class MiqWorker < ApplicationRecord
   end
 
   class << self
-    attr_writer :workers, :rails_worker
+    attr_writer :workers
   end
 
   def self.bundler_groups
@@ -63,13 +63,6 @@ class MiqWorker < ApplicationRecord
     return @workers unless @workers.nil?
 
     workers_configured_count
-  end
-
-  def self.rails_worker?
-    return @rails_worker.call if @rails_worker.kind_of?(Proc)
-    return @rails_worker unless @rails_worker.nil?
-
-    true
   end
 
   def self.scalable?
@@ -92,10 +85,20 @@ class MiqWorker < ApplicationRecord
     leaf_subclasses | descendants.select { |d| d.try(:acts_as_sti_leaf_class?) }
   end
 
-  class_attribute :default_queue_name, :required_roles, :maximum_workers_count, :include_stopping_workers_on_synchronize, :worker_settings_paths
+  class_attribute :default_queue_name, :required_roles, :maximum_workers_count, :include_stopping_workers_on_synchronize, :worker_settings_paths, :rails_worker
   self.include_stopping_workers_on_synchronize = false
   self.required_roles = []
   self.worker_settings_paths = []
+  self.rails_worker = true
+
+  def self.rails_worker?
+    worker = rails_worker
+    return instance_exec(&worker) if worker.kind_of?(Proc)
+    return worker unless worker.nil?
+
+    true
+  end
+  delegate :rails_worker?, :to => :class
 
   def self.server_scope
     return current_scope if current_scope && current_scope.where_values_hash.include?('miq_server_id')
@@ -362,9 +365,8 @@ class MiqWorker < ApplicationRecord
     cmd = "nice -n #{nice_increment} #{cmd}" if ENV["APPLIANCE"]
 
     options = {:guid => guid, :heartbeat => nil}
-    if ems_id
-      options[:ems_id] = ems_id.kind_of?(Array) ? ems_id.join(",") : ems_id
-    end
+    options[:ems_id] = ems_id if ems_id
+
     "#{AwesomeSpawn::CommandLineBuilder.new.build(cmd, options)} #{name}"
   end
 
@@ -379,9 +381,15 @@ class MiqWorker < ApplicationRecord
     self.class.build_command_line(*worker_options.values_at(:guid, :ems_id))
   end
 
+  def environment_variables
+    {
+      "BUNDLER_GROUPS" => self.class.bundler_groups.join(",")
+    }
+  end
+
   def start_runner_via_spawn
     pid = Kernel.spawn(
-      {"BUNDLER_GROUPS" => self.class.bundler_groups.join(",")},
+      environment_variables,
       command_line,
       [:out, :err] => [Rails.root.join("log/evm.log"), "a"]
     )

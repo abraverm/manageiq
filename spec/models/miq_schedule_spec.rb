@@ -6,11 +6,10 @@ RSpec.describe MiqSchedule do
     let(:miq_group) { FactoryBot.create(:miq_group) }
     let(:options) do
       {
-        :method           => 'generate_widget',
-        :send_email       => true,
-        :email_url_prefix => "/report/show_saved/",
-        :miq_group_id     => miq_group.id,
-        :email            => {
+        :method       => 'generate_widget',
+        :send_email   => true,
+        :miq_group_id => miq_group.id,
+        :email        => {
           :send_if_empty => true,
           :to            => %w[xxx@xxx.com yyy@xxx.com],
           :attach        => [:csv],
@@ -741,17 +740,50 @@ RSpec.describe MiqSchedule do
         end
 
         it "and responds to the method with arguments" do
+          cluster = FactoryBot.create(:ems_cluster)
+          resource.update!(:ems_cluster => cluster)
+
           schedule = FactoryBot.create(
             :miq_schedule,
             :resource     => resource,
-            :sched_action => {:method => "raise_cluster_event", :args => ["abc", 123]}
+            :sched_action => {:method => "raise_cluster_event", :args => [cluster.id, "abc"]}
           )
 
-          expect_any_instance_of(Host).to receive("raise_cluster_event").once.with("abc", 123)
+          expect_any_instance_of(Host).to receive("raise_cluster_event").with(cluster.id, "abc").once
 
-          MiqSchedule.queue_scheduled_work(schedule.id, nil, "abc", nil)
+          MiqSchedule.queue_scheduled_work(schedule.id, nil, nil, nil)
         end
       end
+    end
+  end
+
+  describe "#target_ids" do
+    let(:resource) { FactoryBot.create(:host) }
+
+    it "fetches targets" do
+      miqe = MiqExpression.new("=" => {"field" => "Host-id", "value" => resource.id})
+      sch = FactoryBot.create(:miq_schedule, :resource => resource, :filter => miqe)
+
+      expect(sch._log).not_to receive(:warn)
+      expect(sch.get_filter.exp).to eq(miqe.exp)
+      expect(sch.target_ids).to eq([resource.id])
+    end
+
+    it "handles invalid targets" do
+      miqe = MiqExpression.new("=" => {"field" => "Host.id", "value" => resource.id})
+      sch = FactoryBot.create(:miq_schedule, :resource => resource, :filter => miqe)
+
+      expect(sch._log).to receive(:warn).with(/invalid/)
+      expect(sch.get_filter.exp).to eq(miqe.exp)
+      expect(sch.target_ids).to eq([])
+    end
+
+    it "fetches nil targets" do
+      sch = FactoryBot.create(:miq_schedule, :resource => resource, :filter => nil)
+
+      expect(sch._log).to receive(:warn).with(/empty/)
+      expect(sch.get_filter).to eq(nil)
+      expect(sch.target_ids).to eq([])
     end
   end
 end

@@ -6,7 +6,7 @@ Vmdb::Application.configure do
   # In the development environment your application's code is reloaded on
   # every request.  This slows down response time but is perfect for development
   # since you don't have to restart the web server when you make code changes.
-  config.cache_classes = false
+  config.cache_classes = ENV.fetch("CYPRESS", false).to_s == "true"
   config.eager_load = false
 
   # Log error messages when you accidentally call methods on nil.
@@ -43,9 +43,6 @@ Vmdb::Application.configure do
   # Include miq_debug in the list of assets here because it is only used in development
   config.assets.precompile << 'miq_debug.js'
   config.assets.precompile << 'miq_debug.css'
-  # Include totally (https://khan.github.io/tota11y/) here for dev-mode only to help working
-  # on accessibility issues.
-  config.assets.precompile << 'tota11y.js'
 
   # Customize any additional options below...
 

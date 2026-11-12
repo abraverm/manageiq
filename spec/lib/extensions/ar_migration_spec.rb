@@ -10,7 +10,7 @@ RSpec.describe ArPglogicalMigrationHelper do
     let(:version) { "1234567890" }
 
     # sanity check - if this is somehow a version we have, these tests will make no sense
-    before { expect(ActiveRecord::SchemaMigration.normalized_versions).not_to include(version) }
+    before { expect(ActiveRecord::Base.connection_pool.schema_migration.normalized_versions).not_to include(version) }
   end
 
   context "with a region seeded" do
@@ -23,7 +23,7 @@ RSpec.describe ArPglogicalMigrationHelper do
         include_context "without the schema_migrations_ran table"
 
         it "does nothing" do
-          expect(ActiveRecord::SchemaMigration).not_to receive(:normalized_versions)
+          expect(ActiveRecord::Base.connection_pool.schema_migration).not_to receive(:normalized_versions)
           described_class.update_local_migrations_ran("12345", :up)
         end
       end
@@ -48,7 +48,7 @@ RSpec.describe ArPglogicalMigrationHelper do
       include_context "with a dummy version"
       let(:helper_class) { Class.new(ActiveRecord::Base) { include ActiveRecord::IdRegions } }
       let(:other_region_number) { helper_class.my_region_number + rand(1..50) }
-      let(:subscription) { double("Subscription", :enable => nil, :disable => nil, :provider_region => other_region_number) }
+      let(:subscription) { double("Subscription", :enable => nil, :id => 1, :disable => nil, :provider_region => other_region_number) }
 
       subject do
         described_class.new(subscription, version).tap do |s|
@@ -75,7 +75,9 @@ RSpec.describe ArPglogicalMigrationHelper do
         end
 
         it "waits for the migration to be added" do
-          allow(subject).to receive(:restart_subscription)
+          rep_client = double("PG::LogicalReplication::Client", :disable_subscription => nil, :enable_subscription => nil)
+          require 'pg-logical_replication'
+          allow(PG::LogicalReplication::Client).to receive(:new).and_return(rep_client)
           expect(ArPglogicalMigrationHelper.discover_schema_migrations_ran_class.unscoped.where(:version => version).exists?).to eq(false)
 
           allow(subject).to receive(:wait_for_migration?).and_wrap_original do |m, _args|

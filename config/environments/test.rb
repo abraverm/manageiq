@@ -31,8 +31,8 @@ Vmdb::Application.configure do
   config.consider_all_requests_local       = false
   config.action_controller.perform_caching = false
 
-  # Raise exceptions instead of rendering exception templates
-  config.action_dispatch.show_exceptions = true
+  # Render exception templates for rescuable exceptions and raise for other exceptions.
+  config.action_dispatch.show_exceptions = :rescuable
 
   # Disable request forgery protection in test environment
   config.action_controller.allow_forgery_protection = false
@@ -63,8 +63,8 @@ require "minitest"
 require "factory_bot"
 require "timecop"
 require "vcr"
+require "rspec"
 require "webmock/rspec"
-require "capybara"
 
 module AssumeAssetPrecompiledInTest
   def asset_precompiled?(_logical_path)

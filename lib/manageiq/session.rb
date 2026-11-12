@@ -46,6 +46,7 @@ module ManageIQ
     def self.configure_session_store(adapter)
       Vmdb::Application.config.session_store(adapter.type, **adapter.session_options)
       msg = "Using session_store: #{Vmdb::Application.config.session_store}"
+      adapter.enable_rack_session_debug_logger
       _log.info(msg)
       puts "** #{msg}" if !Rails.env.production? && adapter.type != :mem_cache_store
     end
@@ -96,3 +97,5 @@ module ManageIQ
     private_class_method :fetch_store_from_rails
   end
 end
+
+Dir.glob(File.join(__dir__, "session/*")).sort.each { |f| require f }

@@ -19,6 +19,11 @@ module ManageIQ::Providers
     end
     delegate :catalog_types, :to => :class
 
+    # Return the names of all of the manager types e.g.: InfraManager, CloudManager, etc...
+    def self.manager_type_names
+      @manager_types ||= subclasses.map { |k| k.name.gsub("ManageIQ::Providers::", "") }
+    end
+
     def refresher
       self.class::Refresher
     end
@@ -56,9 +61,10 @@ module ManageIQ::Providers
       VMDB::Util.http_proxy(ems_type.try(:to_sym)) || VMDB::Util.http_proxy
     end
 
-    def self.default_blacklisted_event_names
-      Array(::Settings.ems["ems_#{provider_name.underscore}"].try(:blacklisted_event_names))
+    def self.filtered_event_names
+      Array(::Settings.ems["ems_#{ems_type}"].try(:blacklisted_event_names))
     end
+    delegate :filtered_event_names, :to => :class
 
     # Returns a description of the options that are stored in "options" field.
     def self.options_description

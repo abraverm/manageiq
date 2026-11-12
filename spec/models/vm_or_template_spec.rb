@@ -1,4 +1,6 @@
 RSpec.describe VmOrTemplate do
+  include Spec::Support::SupportsHelper
+
   subject { vm }
 
   include_examples "MiqPolicyMixin"
@@ -723,6 +725,34 @@ RSpec.describe VmOrTemplate do
     end
   end
 
+  context "virtual column :supports_reconfigure_network_adapters" do
+    it "returns false if reconfigure_network_adapters is not supported" do
+      ems = FactoryBot.create(:vm_infra)
+      stub_supports_not(ems.class, :reconfigure_network_adapters)
+      expect(ems.supports_reconfigure_network_adapters).to eq(false)
+    end
+
+    it "returns true if reconfigure_network_adapters is supported" do
+      ems = FactoryBot.create(:vm_infra)
+      stub_supports(ems.class, :reconfigure_network_adapters)
+      expect(ems.supports_reconfigure_network_adapters).to eq(true)
+    end
+  end
+
+  context "virtual column :supports_reconfigure_cdroms" do
+    it "returns false if reconfigure_cdroms is not supported" do
+      ems = FactoryBot.create(:vm_infra)
+      stub_supports_not(ems.class, :reconfigure_cdroms)
+      expect(ems.supports_reconfigure_cdroms).to eq(false)
+    end
+
+    it "returns true if reconfigure_cdroms is supported" do
+      ems = FactoryBot.create(:vm_infra)
+      stub_supports(ems.class, :reconfigure_cdroms)
+      expect(ems.supports_reconfigure_cdroms).to eq(true)
+    end
+  end
+
   context ".set_tenant_from_group" do
     before { Tenant.seed }
     let(:tenant1) { FactoryBot.create(:tenant) }
@@ -1134,6 +1164,11 @@ RSpec.describe VmOrTemplate do
       expect(vm).not_to be_active
       expect(virtual_column_sql_value(VmOrTemplate, "active")).to be false
     end
+
+    it "select the attribute" do
+      vm.update(:ext_management_system => ems)
+      expect(VmOrTemplate.select(:id, :active).find(vm.id)).to be_active
+    end
   end
 
   describe ".archived" do
@@ -1161,6 +1196,11 @@ RSpec.describe VmOrTemplate do
       expect(vm).not_to be_archived
       vm.ext_management_system = nil
     end
+
+    it "select the attribute" do
+      vm.update(:ext_management_system => nil, :storage => nil)
+      expect(VmOrTemplate.select(:id, :archived).find(vm.id)).to be_archived
+    end
   end
 
   describe ".orphaned" do
@@ -1187,6 +1227,11 @@ RSpec.describe VmOrTemplate do
       expect(vm).not_to be_orphaned
       expect(virtual_column_sql_value(VmOrTemplate, "orphaned")).to be false
     end
+
+    it "select the attribute" do
+      vm.update(:ext_management_system => nil, :storage => storage)
+      expect(VmOrTemplate.select(:id, :orphaned).find(vm.id)).to be_orphaned
+    end
   end
 
   describe "connected_to_ems?" do
@@ -1210,21 +1255,26 @@ RSpec.describe VmOrTemplate do
   describe ".disconnected?" do
     let(:vm) { FactoryBot.create(:vm_vmware, :connection_state => "connected") }
     let(:vm2) { FactoryBot.create(:vm_vmware, :connection_state => "disconnected") }
-    let(:vm3) { FactoryBot.create(:vm_vmware, :connection_state => nil) }
 
-    it "detects nil" do
-      expect(vm3).not_to be_disconnected
-      expect(virtual_column_sql_value(VmOrTemplate, "disconnected")).to be_falsey
+    context "when no status" do
+      subject { FactoryBot.create(:vm_vmware, :connection_state => nil) }
+
+      it { expect(subject.disconnected?).to be_falsey }
+      it_behaves_like "sql friendly virtual_attribute", :disconnected, false
     end
 
-    it "detects connected" do
-      expect(vm).not_to be_disconnected
-      expect(virtual_column_sql_value(VmOrTemplate, "disconnected")).to be_falsey
+    context "when connected" do
+      subject { FactoryBot.create(:vm_vmware, :connection_state => "connected") }
+
+      it { expect(subject.disconnected?).to be_falsey }
+      it_behaves_like "sql friendly virtual_attribute", :disconnected, false
     end
 
-    it "detects disconnected" do
-      expect(vm2).to be_disconnected
-      expect(virtual_column_sql_value(VmOrTemplate, "disconnected")).to be_truthy
+    context "when disconnected" do
+      subject { FactoryBot.create(:vm_vmware, :connection_state => "disconnected") }
+
+      it { expect(subject.disconnected?).to be_truthy }
+      it_behaves_like "sql friendly virtual_attribute", :disconnected, true
     end
   end
 

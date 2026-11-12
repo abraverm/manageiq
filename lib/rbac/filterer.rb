@@ -2,7 +2,7 @@ module Rbac
   class PolymorphicError < ArgumentError; end
 
   class Filterer
-    # This list is used to detemine whether RBAC, based on assigned tags, should be applied for a class in a search that is based on the class.
+    # This list is used to determine whether RBAC, based on assigned tags, should be applied for a class in a search that is based on the class.
     # Classes should be added to this list ONLY after:
     # 1. Tagging has been enabled in the UI
     # 2. Class contains acts_as_miq_taggable
@@ -141,7 +141,7 @@ module Rbac
       'MiqAeNamespace'         => :ancestor_ids,
       'MiqGroup'               => :descendant_ids,
       'MiqRequest'             => :descendant_ids,
-      'MiqRequestTask'         => nil, # tenant only
+      'MiqRequestTask'         => :descendant_ids,
       'MiqTemplate'            => :ancestor_ids,
       'NetworkPort'            => :descendant_ids,
       'NetworkRouter'          => :descendant_ids,
@@ -296,10 +296,9 @@ module Rbac
       scope = scope.except(:offset, :limit, :order)
       scope = scope_targets(klass, scope, user_filters, user, miq_group)
               .where(conditions).where(sub_filter).where(where_clause).where(exp_sql).where(ids_clause)
-              .includes(include_for_find).includes(exp_includes)
               .order(order)
 
-      scope = include_references(scope, klass, references, exp_includes)
+      scope = include_references(scope, klass, include_for_find, references, exp_includes)
       scope = scope.limit(limit).offset(offset) if attrs[:apply_limit_in_sql]
 
       #      SELECT col1, (SELECT "abc") AS virtual_col
@@ -324,11 +323,17 @@ module Rbac
       #        Hence auth_count calculated from inner_scope.
       #
       if inline_view?(options, scope)
-        inner_scope = scope.except(:select, :includes, :references)
-        scope.includes_values.each { |hash| inner_scope = add_joins(klass, inner_scope, hash) }
+        inner_scope = scope.except(:select, :includes, :references, :eager_load, :preload)
+        # similar to include_references but using joins
+        # TODO: optimization: Can we remove these references from the outer query?
+        #       To do this, we may need to introduce join() to complete the triad: include/reference/join
+        inner_scope = add_joins(klass, inner_scope, references)
+        # TODO: do we want to klass.prune_references(exp_includes)? (see also include_references)
+        inner_scope = add_joins(klass, inner_scope, exp_includes)
         if inner_scope.order_values.present?
           inner_scope = apply_select(klass, inner_scope, select_from_order_columns(inner_scope.order_values))
         end
+        # TODO: Convert from(inner_scope.to_sql) to from(inner_scope)
         scope = scope.from(Arel.sql("(#{inner_scope.to_sql})").as(scope.table_name))
                      .except(:offset, :limit, :where)
 
@@ -351,7 +356,7 @@ module Rbac
         targets = targets.lazy.select { |obj| matches_search_filters?(obj, search_filter, tz, :prune_sql => prune_sql) }
         unless options[:skip_counts]
           # use to_a to run filters once. otherwise will filter for:
-          # length, (possible) pagination ids, and final taget results
+          # length, (possible) pagination ids, and final target results
           targets    = targets.to_a
           auth_count = targets.length
         end
@@ -424,23 +429,36 @@ module Rbac
       end
     end
 
-    def include_references(scope, klass, references, exp_includes)
-      scope.references(klass.includes_to_references(references)).references(klass.includes_to_references(exp_includes))
+    # NOTE: for ActsAsArModel, scope will be a QueryRelation
+    #       for ActsAsArScope, scope will be a standard AR scope
+    def include_references(scope, klass, includes, references, exp_includes)
+      # TODO: do we want to klass.prune_references(exp_includes)? (see same comment for inline_view? section)
+      scope.eager_load(references || {}).eager_load(exp_includes || {}).preload(includes)
     end
 
     # @param includes [Array, Hash]
     def add_joins(klass, scope, includes)
       return scope unless includes
 
+      # NOTE: We should be pre-pruning polymorphic out of here, since they shouldn't be in references.
+      # TODO: do we want to be less lenient? i.e.: raise PolymorphicError if reflection&.polymorphic?
       includes = Array(includes) unless includes.kind_of?(Enumerable)
       includes.each do |association, value|
         reflection = klass.reflect_on_association(association)
         if reflection && !reflection.polymorphic?
           scope = value ? scope.left_outer_joins(association => value) : scope.left_outer_joins(association)
-          scope = scope.distinct if reflection.try(:collection?)
         end
       end
+      # This adds a DISTINCT to safeguard "JOIN has_many" screwing up the LIMIT.
+      scope = scope.distinct if !scope.distinct_value && is_collection?(klass, includes)
       scope
+    end
+
+    def is_collection?(klass, includes)
+      Array(includes).any? do |association, value|
+        reflection = klass.reflect_on_association(association)
+        reflection&.collection? || !reflection.polymorphic? && is_collection?(reflection.klass, value)
+      end
     end
 
     def filtered(objects, options = {})
@@ -472,7 +490,7 @@ module Rbac
 
     # get the base class for a class
     #
-    # rbac_class().nil? checks are there to avoid promoting to a base class when the child class is supported by base class is not
+    # rbac_class().nil? checks are there to avoid promoting to a base class when the child class is supported but base class is not
     # Read: child: MiqAeDomain (supported) to base: MiqAeNamespace (not supported)
     def rbac_base_class(klass)
       if klass.respond_to?(:base_class) && rbac_class(klass).nil? && rbac_class(klass.base_class)
@@ -543,7 +561,7 @@ module Rbac
     #            filter                  = u_union_d_union_b_and_m INTERSECTION tenant_filter_ids
     #
     # a nil as input for any field means it DOES NOT apply the operation(INTERSECTION, UNION)
-    # a nil as output means there is not filter
+    # a nil as output means there is no filter
     #
     # @param u_filtered_ids [nil|Array<Integer>] self service user owned objects
     # @param b_filtered_ids [nil|Array<Integer>] objects that belong to parent
@@ -919,7 +937,7 @@ module Rbac
     end
 
     def matches_search_filters?(obj, filter, timezone, prune_sql: true)
-      filter.nil? || filter.lenient_evaluate(obj, timezone, :prune_sql => prune_sql)
+      filter.nil? || filter.evaluate(obj, timezone, :prune_sql => prune_sql)
     end
   end
 end

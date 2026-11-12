@@ -10,8 +10,8 @@ class MiqRequestTask < ApplicationRecord
   belongs_to :miq_request_task
   belongs_to :tenant
 
-  serialize   :phase_context, Hash
-  serialize   :options,       Hash
+  serialize   :phase_context, :type => Hash
+  serialize   :options,       :type => Hash
 
   default_value_for :phase_context, {}
   default_value_for :options,       {}
@@ -140,12 +140,19 @@ class MiqRequestTask < ApplicationRecord
 
     _log.info("Queuing #{request_class::TASK_DESCRIPTION}: [#{description}]...")
 
-    if resource_action&.configuration_script_payload
-      inputs = dialog_values.merge(:request_task_id => id)
-      miq_task_id = resource_action.configuration_script_payload.run(:inputs => inputs, :userid => get_user.userid, :zone => zone, :object => self)
+    if options[:configuration_script_payload_id]
+      configuration_script_payload = ConfigurationScriptPayload.find(options[:configuration_script_payload_id])
+
+      miq_task_id = configuration_script_payload.run(
+        :inputs            => configuration_script_inputs,
+        :execution_context => configuration_script_context,
+        :userid            => get_user.userid,
+        :zone              => zone,
+        :object            => self
+      )
 
       options[:miq_task_id]                     = miq_task_id
-      options[:configuration_script_payload_id] = resource_action.configuration_script_payload.id
+      options[:configuration_script_payload_id] = configuration_script_payload.id
       options[:configuration_script_id]         = MiqTask.find(miq_task_id).context_data[:workflow_instance_id]
       save!
     elsif self.class::AUTOMATE_DRIVES
@@ -263,6 +270,14 @@ class MiqRequestTask < ApplicationRecord
 
   def valid_states
     %w[pending finished] + request_class::ACTIVE_STATES
+  end
+
+  def configuration_script_inputs
+    {:dialog => dialog_values}
+  end
+
+  def configuration_script_context
+    {}
   end
 
   def dialog_values

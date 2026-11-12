@@ -5,7 +5,6 @@ class MiqServer < ApplicationRecord
   include ServerSmartProxy
   include ConfigurationManagement
   include EnvironmentManagement
-  include LogManagement
   include QueueManagement
   include RoleManagement
   include StatusManagement
@@ -31,7 +30,7 @@ class MiqServer < ApplicationRecord
   scope :active_miq_servers, -> { where(:status => STATUSES_ACTIVE) }
   scope :recently_active,    -> { where(:last_heartbeat => 10.minutes.ago.utc..) }
   scope :with_zone_id, ->(zone_id) { where(:zone_id => zone_id) }
-  virtual_delegate :description, :to => :zone, :prefix => true, :allow_nil => true, :type => :string
+  virtual_attribute :zone_description, :string, :through => :zone, :source => :description
 
   validate :validate_zone_not_maintenance?
   validate :zone_unchanged_in_pods, :on => :update
@@ -220,9 +219,7 @@ class MiqServer < ApplicationRecord
 
     begin
       _log.info("Reconnecting to database after error...")
-      # Remove the connection and establish a new one since reconnect! doesn't always play nice with SSL postgresql connections
-      spec_name = ActiveRecord::Base.connection_specification_name
-      ActiveRecord::Base.establish_connection(ActiveRecord::Base.remove_connection(spec_name))
+      ActiveRecord::Base.postgresql_ssl_friendly_base_reconnect
     rescue Exception => err
       _log.error("#{err.message}, during reconnect!")
     else
@@ -323,10 +320,6 @@ class MiqServer < ApplicationRecord
 
   def friendly_name
     _("EVM Server (%{id})") % {:id => pid}
-  end
-
-  def who_am_i
-    @who_am_i ||= "#{name} #{my_zone} #{self.class.name} #{id}"
   end
 
   def database_application_name
@@ -627,10 +620,29 @@ class MiqServer < ApplicationRecord
     broker = MiqQueue.messaging_client("health_check")
     return if broker.nil?
 
-    broker.publish_message(:service => "manageiq.liveness-check", :message => "test message", :payload => {})
-    broker.subscribe_messages(:service => "manageiq.liveness-check") { break }
-  rescue => err
-    _log.error("Messaging health check failed: #{err}")
-    shutdown_and_exit(1)
+    # tolerate transient broker transport blips before bouncing evm
+    max_attempts = ::Settings.server.server_messaging_max_attempts
+    retry_delay = ::Settings.server.server_messaging_retry_delay.to_i_with_method
+    attempts = 0
+
+    begin
+      broker.topics
+    rescue => err
+      attempts += 1
+      if attempts < max_attempts
+        _log.warn("Messaging health check attempt #{attempts}/#{max_attempts} failed: #{err}. Retrying in #{retry_delay}s...")
+        sleep(retry_delay)
+        retry
+      else
+        _log.error("Messaging health check failed after #{max_attempts} attempts: #{err}")
+        shutdown_and_exit(1)
+      end
+    ensure
+      begin
+        broker.close
+      rescue
+        nil
+      end
+    end
   end
 end # class MiqServer

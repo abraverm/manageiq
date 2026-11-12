@@ -10,18 +10,18 @@ class MiqWorker
         definition[:spec][:template][:spec][:nodeSelector] = zone_selector
       end
 
+      env = container_environment_variables.merge(environment_variables).map { |name, value| {:name => name, :value => value} }
+
       container = definition[:spec][:template][:spec][:containers].first
 
-      if container_image_tag.include?("latest")
-        container[:imagePullPolicy] = "Always"
-      else
-        container[:imagePullPolicy] = "IfNotPresent"
-      end
+      container[:imagePullPolicy] = container_image_tag.include?("latest") ? "Always" : "IfNotPresent"
+      container[:image]           = container_image
+      container[:resources]       = resource_constraints
+      container[:env].concat(env)
+    end
 
-      container[:image] = container_image
-      container[:env] << {:name => "WORKER_CLASS_NAME", :value => self.class.name}
-      container[:env] << {:name => "BUNDLER_GROUPS", :value => self.class.bundler_groups.join(",")}
-      container[:resources] = resource_constraints
+    def container_environment_variables
+      {"WORKER_CLASS_NAME" => self.class.name}
     end
 
     def scale_deployment
@@ -105,11 +105,15 @@ class MiqWorker
       "#{MiqServer.my_server.compressed_id}-"
     end
 
+    def deployment_base_name
+      minimal_class_name.sub("Manager", "").underscore.dasherize.tr("/", "-")
+    end
+
     def worker_deployment_name
       @worker_deployment_name ||= begin
-        deployment_name = abbreviated_class_name.dup.chomp("Worker").sub("Manager", "").sub(/^Miq/, "")
+        deployment_name = deployment_base_name.dup
         deployment_name << "-#{ApplicationRecord.split_id(ems_id).last}" if respond_to?(:ems_id) && ems_id.present?
-        "#{deployment_prefix}#{deployment_name.underscore.dasherize.tr("/", "-")}"
+        "#{deployment_prefix}#{deployment_name}"
       end
     end
 

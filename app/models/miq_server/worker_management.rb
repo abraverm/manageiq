@@ -41,6 +41,7 @@ class MiqServer::WorkerManagement
     clean_heartbeat_files # Appliance specific
     sync_config
     start_drb_server
+    sync_from_system
     sync_workers
     wait_for_started_workers
   end
@@ -89,5 +90,13 @@ class MiqServer::WorkerManagement
       w.destroy
     end
     miq_workers.reload
+  end
+
+  private
+
+  def sync_starting_rails_workers
+  end
+
+  def sync_stopping_rails_workers
   end
 end

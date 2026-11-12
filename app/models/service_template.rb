@@ -20,7 +20,8 @@ class ServiceTemplate < ApplicationRecord
                                   :fqname,
                                   :configuration_template,
                                   :configuration_template_id,
-                                  :configuration_template_type].freeze
+                                  :configuration_template_type,
+                                  :configuration_script_id].freeze
 
   include CustomActionsMixin
   include ServiceMixin
@@ -136,12 +137,28 @@ class ServiceTemplate < ApplicationRecord
   end
 
   def self.class_from_request_data(data)
-    request_type = data['prov_type']
-    if request_type.include?('generic_')
-      generic_type = request_type.split('generic_').last
-      "ServiceTemplate#{generic_type.camelize}".constantize
+    class_from_prov_type(data['prov_type'])
+  end
+
+  def self.class_from_prov_type(prov_type)
+    raise ArgumentError, "Invalid prov_type '#{prov_type}'" unless all_catalog_item_types.key?(prov_type)
+
+    # This is the full list of acceptable values.  This allows us to check for
+    # class name validity before calling constantize.
+    allowed_class_names = descendants.collect(&:name)
+
+    # If we are given a "generic" provision type then assume that the prov_type
+    # maps to a valid class otherwise it is invalid
+    #
+    # Non-generic provision types however are able to work with the base
+    # ServiceTemplate class and thus we cannot raise an exception in this case.
+    if prov_type.starts_with?("generic_")
+      generic_type = prov_type.split('generic_').last
+      class_name   = "ServiceTemplate#{generic_type.camelize}"
+      class_name.constantize(:allowlist => allowed_class_names)
     else
-      ServiceTemplate
+      class_name = "ServiceTemplate#{prov_type.camelize}"
+      class_name.safe_constantize(:allowlist => allowed_class_names) || ServiceTemplate
     end
   end
 
@@ -492,6 +509,17 @@ class ServiceTemplate < ApplicationRecord
     zone&.name if atomic?
   end
 
+  # ServiceTemplate button_order uses prefixed string keys ("cb-N" for buttons,
+  # "cbg-N" for groups) unlike CustomButtonSet which stores integer IDs.
+  def add_custom_button(button_id)
+    with_lock do
+      self.options ||= {}
+      key = "cb-#{button_id}"
+      options[:button_order] = (options[:button_order] || []) | [key]
+      save!
+    end
+  end
+
   private
 
   def update_service_resources(config_info, auth_user = nil)
@@ -550,11 +578,13 @@ class ServiceTemplate < ApplicationRecord
 
   def construct_config_info
     config_info = {}
-
-    miq_request_resource = service_resources.find_by(:resource_type => 'MiqRequest')
-    config_info.merge!(miq_request_resource.resource.options.compact) if miq_request_resource
-
+    config_info.merge!(miq_request_info)
     config_info.merge!(resource_actions_info)
+  end
+
+  def miq_request_info
+    miq_request = service_resources.find_by(:resource_type => 'MiqRequest')&.resource
+    miq_request&.options&.compact || {}
   end
 
   def resource_actions_info

@@ -700,9 +700,9 @@ en:
       mem_swapped_absolute_average: Memory - Swapped Average
       mem_swaptarget_absolute_average: Memory - Swap Target Average
       mem_usage_absolute_average: Memory - Usage of Total Allocated (%)
-      mem_usage_absolute_average_avg_over_time_period: Memeory Usage Absolute Average Avg Over Time Period
-      mem_usage_absolute_average_high_over_time_period: Memeory Usage Absolute Average High Over Time Period
-      mem_usage_absolute_average_low_over_time_period: Memeory Usage Absolute Average Low Over Time Period
+      mem_usage_absolute_average_avg_over_time_period: Memory Usage Absolute Average Avg Over Time Period
+      mem_usage_absolute_average_high_over_time_period: Memory Usage Absolute Average High Over Time Period
+      mem_usage_absolute_average_low_over_time_period: Memory Usage Absolute Average Low Over Time Period
       mem_vmmemctl_absolute_average: Memory - Balloon Average
       mem_vmmemctltarget_absolute_average: Memory - Balloon Target Average
       memory: Memory
@@ -1045,7 +1045,6 @@ en:
       uri_or_queue_name: Uri Or Queue Name
       uri: Uri
       url: URL
-      use_config_for_attributes: Use Config For Attributes
       used: Used
       used_storage: Used Storage
       user_assigned_os: User Assigned Os
@@ -1412,7 +1411,7 @@ en:
       CustomButton:                   Button
       CustomButtonSet:                Button Group
       ConfigurationProfile:           Configuration Profiles
-      ConfigurationScript:            Template (Ansible Tower)
+      ConfigurationScript:            Template
       ConfigurationScriptSource:      Repository
       ConfiguredSystem:               Configured Systems
       Container:                      Container
@@ -1436,8 +1435,6 @@ en:
       EmsFolder:                      Folder
       ExtManagementSystem:            Provider
       ExtManagementSystemPerformance: Performance - Provider
-      FileDepotFtp:                   FTP
-      FileDepotFtpAnonymous:          Anonymous FTP
       FileDepotNfs:                   NFS
       FileDepotS3:                    AWS S3
       FileDepotSwift:                 OpenStack Swift
@@ -1458,9 +1455,9 @@ en:
       LdapRegion:                     LDAP Region
       LdapServer:                     LDAP Server
       LoadBalancer:                   Load Balancer
-      ManageIQ::Providers::AutomationManager:                                             Automation Manager
+      ManageIQ::Providers::AutomationManager:                                             Automation Provider
       ManageIQ::Providers::BaseManager:                                                   Provider
-      ManageIQ::Providers::EmbeddedAutomationManager:                                     Embedded Automation Manager
+      ManageIQ::Providers::EmbeddedAutomationManager:                                     Embedded Automation Provider
       ManageIQ::Providers::EmbeddedAutomationManager::Authentication:                     Credential
       ManageIQ::Providers::EmbeddedAutomationManager::ConfigurationScriptSource:          Repository
       ManageIQ::Providers::EmbeddedAnsible::AutomationManager::AmazonCredential:          Credential (Amazon)
@@ -1483,7 +1480,9 @@ en:
       ManageIQ::Providers::Workflows::AutomationManager::Credential:                      Credential (Embedded Workflows)
       ManageIQ::Providers::Workflows::AutomationManager::ScmCredential:                   Credential (SCM)
       ManageIQ::Providers::Workflows::AutomationManager::WorkflowCredential:              Credential (Workflow)
-      ManageIQ::Providers::ExternalAutomationManager:                                     Automation Manager
+      ManageIQ::Providers::ExternalAutomationManager:                                     Automation Provider
+      ManageIQ::Providers::ExternalAutomationManager::ConfigurationScript:                Template
+      ManageIQ::Providers::ExternalAutomationManager::OrchestrationStack:                 Automation Job
       ManageIQ::Providers::AutomationManager::Authentication:                             Credential
       ManageIQ::Providers::AnsibleTower::AutomationManager::AmazonCredential:             Credential (Amazon)
       ManageIQ::Providers::AnsibleTower::AutomationManager::AzureCredential:              Credential (Microsoft Azure)
@@ -1495,10 +1494,29 @@ en:
       ManageIQ::Providers::AnsibleTower::AutomationManager::Satellite6Credential:         Credential (Satellite)
       ManageIQ::Providers::AnsibleTower::AutomationManager::ScmCredential:                Credential (SCM)
       ManageIQ::Providers::AnsibleTower::AutomationManager::VmwareCredential:             Credential (VMware)
-      ManageIQ::Providers::AnsibleTower::AutomationManager:                               Automation Manager (Ansible Tower)
+      ManageIQ::Providers::AnsibleTower::AutomationManager:                               Automation Provider (Ansible Tower)
       ManageIQ::Providers::AnsibleTower::AutomationManager::ConfigurationScript:          Job Template (Ansible Tower)
       ManageIQ::Providers::AnsibleTower::AutomationManager::ConfigurationWorkflow:        Workflow Template (Ansible Tower)
       ManageIQ::Providers::AnsibleTower::AutomationManager::Playbook:                     Playbook (Ansible Tower)
+      ManageIQ::Providers::AnsibleTower::AutomationManager::Job:                          Job (Ansible Tower)
+      ManageIQ::Providers::Awx::AutomationManager::AmazonCredential:                      Credential (Amazon)
+      ManageIQ::Providers::Awx::AutomationManager::AzureCredential:                       Credential (Microsoft Azure)
+      ManageIQ::Providers::Awx::AutomationManager::GoogleCredential:                      Credential (Google)
+      ManageIQ::Providers::Awx::AutomationManager::MachineCredential:                     Credential (Machine)
+      ManageIQ::Providers::Awx::AutomationManager::NetworkCredential:                     Credential (Network)
+      ManageIQ::Providers::Awx::AutomationManager::OpenstackCredential:                   Credential (OpenStack)
+      ManageIQ::Providers::Awx::AutomationManager::RackspaceCredential:                   Credential (Rackspace)
+      ManageIQ::Providers::Awx::AutomationManager::Satellite6Credential:                  Credential (Satellite)
+      ManageIQ::Providers::Awx::AutomationManager::ScmCredential:                         Credential (SCM)
+      ManageIQ::Providers::Awx::AutomationManager::VmwareCredential:                      Credential (VMware)
+      ManageIQ::Providers::Awx::AutomationManager:                                        Automation Provider (AWX)
+      ManageIQ::Providers::Awx::AutomationManager::ConfigurationScript:                   Job Template (AWX)
+      ManageIQ::Providers::Awx::AutomationManager::ConfigurationWorkflow:                 Workflow Template (AWX)
+      ManageIQ::Providers::Awx::AutomationManager::Playbook:                              Playbook (AWX)
+      ManageIQ::Providers::Awx::AutomationManager::Job:                                   Job (AWX)
+      ManageIQ::Providers::TerraformEnterprise::AutomationManager:                        AutomationManager (Terraform Enterprise)
+      ManageIQ::Providers::TerraformEnterprise::AutomationManager::ConfigurationScript:   Workspace (Terraform Enterprise)
+      ManageIQ::Providers::TerraformEnterprise::AutomationManager::OrchestrationStack:    Run (Terraform Enterprise)
       ManageIQ::Providers::Foreman::ConfigurationManager:                                 Configuration Manager (Foreman)
       ManageIQ::Providers::ConfigurationManager:                                          Configuration Manager
       ManageIQ::Providers::AnsibleTower::AutomationManager::ConfiguredSystem:             Configured System
@@ -1548,7 +1566,7 @@ en:
       ManageIQ::Providers::Vmware::CloudManager:                                          Cloud Provider (VMware vCloud)
       ManageIQ::Providers::IbmCic::CloudManager:                                          Cloud Provider (IBM CIC)
       ManageIQ::Providers::IbmCloud::VPC::CloudManager:                                   Cloud Provider (IBM Cloud VPC)
-      ManageIQ::Providers::AzureStack::CloudManager:                                      Cloud Provider (Microsoft Azure Stack)                          
+      ManageIQ::Providers::AzureStack::CloudManager:                                      Cloud Provider (Microsoft Azure Stack)
       ManageIQ::Providers::IbmCloud::PowerVirtualServers::CloudManager:                   Cloud Provider (IBM Cloud Power Systems Virtual Servers)
       ManageIQ::Providers::IbmPowerVc::CloudManager:                                      Cloud Provider (IBM PowerVC)
       ManageIQ::Providers::OracleCloud::CloudManager:                                     Cloud Provider (Oracle Cloud)
@@ -1741,8 +1759,8 @@ en:
       container_templates:         Templates
       custom_button:               Button
       custom_button_set:           Button Group
-      ems_automation:              Automation Manager
-      ems_automations:             Automation Managers
+      ems_automation:              Automation Provider
+      ems_automations:             Automation Providers
       ems_block_storage:           Block Storage Manager
       ems_block_storages:          Block Storage Managers
       ems_cloud:                   Cloud Provider

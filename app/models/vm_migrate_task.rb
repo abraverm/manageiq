@@ -1,10 +1,16 @@
 class VmMigrateTask < MiqRequestTask
-  alias_attribute :vm, :source
-
   validate :validate_request_type, :validate_state
   default_value_for :request_type, "vm_migrate"
 
   AUTOMATE_DRIVES = true
+
+  def vm
+    source
+  end
+
+  def vm=(object)
+    self.source = object
+  end
 
   def self.base_model
     VmMigrateTask
@@ -34,6 +40,14 @@ class VmMigrateTask < MiqRequestTask
     storage = req_obj.get_option_last(:placement_ds_name)
     new_settings << "Storage: #{storage}" if storage.present?
     "#{request_class::TASK_DESCRIPTION} for: #{name} - #{new_settings.join(", ")}"
+  end
+
+  def statemachine_task_status
+    if %w[finished migrated].include?(state)
+      status.to_s.downcase == "error" ? "error" : "ok"
+    else
+      "retry"
+    end
   end
 
   def after_request_task_create

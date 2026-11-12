@@ -1,36 +1,36 @@
 module ManageIQ::Providers::Inventory::Persister::Builder::Shared
   extend ActiveSupport::Concern
 
-  included do
-    INVENTORY_RECONNECT_BLOCK = lambda do |inventory_collection, inventory_objects_index, attributes_index|
-      relation = inventory_collection.model_class.where(:ems_id => nil)
+  INVENTORY_RECONNECT_BLOCK = lambda do |inventory_collection, inventory_objects_index, attributes_index|
+    relation = inventory_collection.model_class.where(:ems_id => nil)
 
-      return if relation.count <= 0
+    return if relation.count <= 0
 
-      inventory_objects_index.each_slice(100) do |batch|
-        batch_refs = batch.map(&:first)
-        relation.where(inventory_collection.manager_ref.first => batch_refs).order(:id => :asc).each do |record|
-          index = inventory_collection.object_index_with_keys(inventory_collection.manager_ref_to_cols, record)
+    inventory_objects_index.each_slice(100) do |batch|
+      batch_refs = batch.map(&:first)
+      relation.where(inventory_collection.manager_ref.first => batch_refs).order(:id => :asc).each do |record|
+        index = inventory_collection.object_index_with_keys(inventory_collection.manager_ref_to_cols, record)
 
-          # We need to delete the record from the inventory_objects_index
-          # and attributes_index, otherwise it would be sent for create.
-          inventory_object = inventory_objects_index.delete(index)
-          hash             = attributes_index.delete(index)
+        # We need to delete the record from the inventory_objects_index
+        # and attributes_index, otherwise it would be sent for create.
+        inventory_object = inventory_objects_index.delete(index)
+        hash             = attributes_index.delete(index)
 
-          # Skip if hash is blank, which can happen when having several archived entities with the same ref
-          next unless hash
+        # Skip if hash is blank, which can happen when having several archived entities with the same ref
+        next unless hash
 
-          record.assign_attributes(hash.except(:id, :type))
-          if !inventory_collection.check_changed? || record.changed?
-            record.save!
-            inventory_collection.store_updated_records(record)
-          end
-
-          inventory_object.id = record.id
+        record.assign_attributes(hash.except(:id, :type))
+        if !inventory_collection.check_changed? || record.changed?
+          record.save!
+          inventory_collection.store_updated_records(record)
         end
-      end
-    end.freeze
 
+        inventory_object.id = record.id
+      end
+    end
+  end.freeze
+
+  included do
     def vendor
       ::ManageIQ::Providers::Inflector.provider_name(@persister_class).downcase
     rescue
@@ -38,13 +38,16 @@ module ManageIQ::Providers::Inventory::Persister::Builder::Shared
     end
 
     def ext_management_system
-      skip_model_class
-
       add_properties(
         :manager_ref       => %i[guid],
+        :model_class       => ExtManagementSystem,
         :custom_save_block => lambda do |ems, inventory_collection|
-          ems_attrs = inventory_collection.data.first&.attributes
-          ems.update!(ems_attrs) if ems_attrs
+          inventory_object = inventory_collection.data.first
+          if inventory_object
+            ems_attrs = inventory_object.attributes
+            ems.update!(ems_attrs) if ems_attrs.present?
+            inventory_object.id = ems.id
+          end
         end
       )
     end
@@ -243,14 +246,18 @@ module ManageIQ::Providers::Inventory::Persister::Builder::Shared
           next if collection.blank?
 
           collection.data.each do |obj|
+            next unless obj.data.key?(relationship_key)
+
             parent = obj.data[relationship_key].try(&:load)
-            next if parent.nil?
+            if parent.nil?
+              parent_by_child[collection.model_class][obj.id] = nil
+            else
+              parent_klass = parent.inventory_collection.model_class.base_class
+              child_klass  = collection.model_class.base_class
 
-            parent_klass = parent.inventory_collection.model_class.base_class
-            child_klass  = collection.model_class.base_class
-
-            children_by_parent[parent_klass][parent.id] << [child_klass, obj.id]
-            parent_by_child[collection.model_class][obj.id] = [parent_klass, parent.id]
+              children_by_parent[parent_klass][parent.id] << [child_klass, obj.id]
+              parent_by_child[collection.model_class][obj.id] = [parent_klass, parent.id]
+            end
           end
         end
 
@@ -266,16 +273,20 @@ module ManageIQ::Providers::Inventory::Persister::Builder::Shared
 
           child_recs.each do |model_class, children_by_id|
             children_by_id.each_value do |child|
-              new_parent_klass, new_parent_id = parent_by_child[model_class][child.id]
+              new_parent_info = parent_by_child[model_class][child.id]
+              new_parent_klass, new_parent_id = new_parent_info if new_parent_info
               prev_parent = child.with_relationship_type(relationship_type) { child.parents(:of_type => parent_type)&.first }
 
-              next if prev_parent && (prev_parent.class.base_class == new_parent_klass && prev_parent.id == new_parent_id)
+              # Skip if parent hasn't changed
+              next if prev_parent && new_parent_info && prev_parent.class.base_class == new_parent_klass && prev_parent.id == new_parent_id
+              # Skip if both are nil
+              next if prev_parent.nil? && new_parent_info.nil?
 
               children_to_remove[prev_parent.class.base_class][prev_parent.id] << child if prev_parent
-              children_to_add[new_parent_klass][new_parent_id] << child
+              children_to_add[new_parent_klass][new_parent_id] << child if new_parent_info
 
               parent_recs_needed[prev_parent.class.base_class] << prev_parent.id if prev_parent
-              parent_recs_needed[new_parent_klass] << new_parent_id
+              parent_recs_needed[new_parent_klass] << new_parent_id if new_parent_info
             end
           end
 

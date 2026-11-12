@@ -6,7 +6,7 @@ class CustomButton < ApplicationRecord
     order(Arel.sql(order))
   }
 
-  serialize :options, Hash
+  serialize :options, :type => Hash
   serialize :visibility_expression
   serialize :enablement_expression
   serialize :visibility
@@ -206,14 +206,14 @@ class CustomButton < ApplicationRecord
     return true unless enablement_expression
     return false if enablement_expression && !object # list
 
-    enablement_expression.lenient_evaluate(object)
+    enablement_expression.evaluate(object)
   end
 
   def evaluate_visibility_expression_for(object)
     return true unless visibility_expression
     return false if visibility_expression && !object # object == nil, method is called for list of objects
 
-    visibility_expression.lenient_evaluate(object)
+    visibility_expression.evaluate(object)
   end
 
   # End - Helper methods to support moving automate columns to resource_actions table
@@ -229,8 +229,12 @@ class CustomButton < ApplicationRecord
 
   def visible_for_current_user?
     return false unless visibility.key?(:roles)
+    return true if visibility[:roles].include?("_ALL_")
 
-    visibility[:roles].include?(User.current_user.miq_user_role_name) || visibility[:roles].include?("_ALL_")
+    role_id = User.current_user.miq_user_role&.id
+    return false unless role_id
+
+    visibility[:roles].any? { |v| v.to_i == role_id }
   end
 
   def self.get_user(user)

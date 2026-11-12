@@ -4,25 +4,16 @@
     :keep_events: 6.months
     :purge_window_size: 1000
 :authentication:
-  :basedn:
-  :bind_dn:
-  :bind_pwd:
-  :bind_timeout: 30
   :debug: false
-  :follow_referrals: false
-  :get_direct_groups: true
-  :group_memberships_max_depth: 2
-  :group_attribute: memberof
-  :ldaphost:
-  :ldapport: '389'
   :mode: database
+  :group_delimiter:
   :max_failed_login_attempts: 3
   :locked_account_timeout: 2.minutes
-  :search_timeout: 30
-  :user_suffix:
-  :user_type: userprincipalname
   :amazon_key:
   :amazon_secret:
+  :password_rules:
+    :complexity_min_score: 3
+    :complexity_extra_words: []
 :binary_blob:
   :keep_orphaned: 1.month
   :purge_window_size: 100
@@ -92,12 +83,12 @@
   :product_documentation_direct_link: true
   :product_support_website: https://www.manageiq.org
   :product_support_website_text: ManageIQ.org
-  :ansible_provider: https://manageiq.org/docs/reference/latest/managing_providers/#adding-an-ansible-tower-provider
-  :cloud_provider: https://manageiq.org/docs/reference/latest/managing_providers/#cloud-providers
-  :configuration_provider: https://manageiq.org/docs/reference/latest/managing_providers/#configuration-management-providers
-  :container_provider: https://manageiq.org/docs/reference/latest/managing_providers/#containers-providers
-  :infra_provider: https://manageiq.org/docs/reference/latest/managing_providers/#infrastructure-providers
-  :network_provider: https://manageiq.org/docs/reference/latest/managing_providers/#network-managers
+  :automation_manager: https://www.manageiq.org/docs/reference/latest/managing_providers/#automation-management-providers
+  :cloud_provider: https://www.manageiq.org/docs/reference/latest/managing_providers/#cloud-providers
+  :configuration_provider: https://www.manageiq.org/docs/reference/latest/managing_providers/#configuration-management-providers
+  :container_provider: https://www.manageiq.org/docs/reference/latest/managing_providers/#containers-providers
+  :infra_provider: https://www.manageiq.org/docs/reference/latest/managing_providers/#infrastructure-providers
+  :network_provider: https://www.manageiq.org/docs/reference/latest/managing_providers/#network-managers
   :physical_infra_provider: https://www.manageiq.org/docs/reference/latest/managing_providers/#physical-infrastucture-providers
   :storage_manager: https://www.manageiq.org/docs/reference/latest/managing_providers/#storage-managers
 
@@ -838,27 +829,6 @@
     :user:
     :scheme:
 :log:
-  :collection:
-    :include_automate_models_and_dialogs: true
-    :archive:
-      :pattern:
-    :current:
-      :pattern:
-      - log/*.log
-      - log/apache/*.log
-      - log/*.txt
-      - config/*
-      - "/var/log/syslog*"
-      - "/var/log/daemon.log*"
-      - "/etc/default/ntp*"
-      - "/var/log/messages*"
-      - "/var/log/cron*"
-      - "/var/log/tower/*.log"
-      - BUILD
-      - GUID
-      - VERSION
-    :ping_depot: true
-    :ping_depot_timeout: 20
   :level: info
   :level_audit: info
   :level_rails: info
@@ -926,6 +896,10 @@
   :use_sql_view: false
 :repository_scanning:
   :defaultsmartproxy:
+:request_logs:
+  :history:
+    :keep_request_logs: 6.months
+    :purge_window_size: 1000
 :server:
   :asynchronous_notifications: true
   :case_sensitive_name_search: false
@@ -967,6 +941,8 @@
   :server_dequeue_frequency: 5.seconds
   :server_log_frequency: 5.minutes
   :server_log_timings_threshold: 1.second
+  :server_messaging_max_attempts: 3
+  :server_messaging_retry_delay: 2.seconds
   :server_monitor_frequency: 60.seconds
   :server_role_monitor_frequency: 15.seconds
   :session_store: cache
@@ -1084,6 +1060,7 @@
         :memory_threshold: 2.gigabytes
         :nice_delta: 1
         :poll: 1.seconds
+        :rails_worker: true
     :queue_worker_base:
       :defaults:
         :dequeue_method: drb
@@ -1155,6 +1132,7 @@
       :poll: 15.seconds
       :queue_timeout_interval: 15.seconds
       :report_result_purge_interval: 1.week
+      :request_logs_purge_interval: 1.day
       :server_log_stats_interval: 5.minutes
       :server_stats_interval: 60.seconds
       :service_retired_interval: 10.minutes

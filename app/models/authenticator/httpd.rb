@@ -4,6 +4,11 @@ module Authenticator
       'External httpd'
     end
 
+    # @return group delimiter defined in settings
+    def self.group_delimiter
+      ::Settings.authentication.group_delimiter.presence
+    end
+
     def authorize_queue(username, request, options, *_args)
       log_auth_debug("authorize_queue(username=#{username}, options=#{options})")
 
@@ -118,6 +123,8 @@ module Authenticator
       User.in_my_region.where("userid LIKE ?", "%=#{user_attrs[:username]},%,#{dn_domain}").last
     end
 
+    # TODO: If we now have the principal name via krbPrincipalName, we can use that instead of this method.
+    # In order to remove this method, we'd need to make sure all identity providers using httpd expose the principal name in the same format, even if it's just the username.
     def username_to_upn_name(user_attrs)
       return user_attrs[:username] if user_attrs[:domain].nil?
 
@@ -128,7 +135,8 @@ module Authenticator
 
     def user_details_from_external_directory(username)
       ext_user_attrs = user_attrs_from_external_directory(username)
-      user_attrs = {:username  => username,
+      principal_username = ext_user_attrs["krbPrincipalName"].presence && normalize_username(ext_user_attrs["krbPrincipalName"])
+      user_attrs = {:username  => principal_username || username,
                     :fullname  => ext_user_attrs["displayname"],
                     :firstname => ext_user_attrs["givenname"],
                     :lastname  => ext_user_attrs["sn"],
@@ -146,8 +154,10 @@ module Authenticator
         user_headers.each { |k, v| log_auth_debug("  %-24{key} = \"%{val}\"" % {:key => k, :val => v}) }
       end
 
-      groups     = CGI.unescape(user_headers['X-REMOTE-USER-GROUPS'] || '').split(/[;:,]/)
-      user_attrs = {:username  => username,
+      delimiter  = self.class.group_delimiter || user_headers['X-REMOTE-USER-GROUP-DELIMITER'].presence || /[;:,]/
+      groups     = CGI.unescape(user_headers['X-REMOTE-USER-GROUPS'] || '').split(delimiter)
+      principal_username = user_headers['X-REMOTE-USER-PRINCIPAL'].presence && normalize_username(user_headers['X-REMOTE-USER-PRINCIPAL'])
+      user_attrs = {:username  => principal_username || username,
                     :fullname  => user_headers['X-REMOTE-USER-FULLNAME'],
                     :firstname => user_headers['X-REMOTE-USER-FIRSTNAME'],
                     :lastname  => user_headers['X-REMOTE-USER-LASTNAME'],
@@ -158,6 +168,8 @@ module Authenticator
     end
 
     private def user_headers_from_request(request)
+      # NOTE: X-REMOTE-USER-PRINCIPAL must be set in the headers by the sssd/apache configuration
+      # with a value of the krbPrincipalName or some other reasonable value based on the identity provider.
       %w[
         X-REMOTE-USER
         X-REMOTE-USER-FULLNAME
@@ -166,6 +178,8 @@ module Authenticator
         X-REMOTE-USER-EMAIL
         X-REMOTE-USER-DOMAIN
         X-REMOTE-USER-GROUPS
+        X-REMOTE-USER-GROUP-DELIMITER
+        X-REMOTE-USER-PRINCIPAL
       ].each_with_object({}) do |k, h|
         h[k] = request.headers[k]&.force_encoding("UTF-8")
       end.delete_nils
@@ -191,7 +205,7 @@ module Authenticator
       end
     end
 
-    ATTRS_NEEDED = %w[mail givenname sn displayname domainname].freeze
+    ATTRS_NEEDED = %w[mail givenname sn displayname domainname krbPrincipalName].freeze
 
     def user_attrs_from_external_directory_via_dbus(username)
       return unless username

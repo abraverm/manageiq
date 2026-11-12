@@ -23,12 +23,12 @@ module Ansible
 
       # @return [Boolean] true if the ansible job is still running, false when it's finished
       def running?
-        AwesomeSpawn.run("ansible-runner", :params => ["is-alive", base_dir, :json, {:ident => "result"}]).success?
+        Ansible::Runner.raw_execute(:params => ["is-alive", base_dir, :json, {:ident => "result"}]).success?
       end
 
       # Stops the running Ansible job
       def stop
-        AwesomeSpawn.run("ansible-runner", :params => ["stop", base_dir, :json, {:ident => "result"}])
+        Ansible::Runner.raw_execute(:params => ["stop", base_dir, :json, {:ident => "result"}])
       end
 
       # @return [Ansible::Runner::Response, NilClass] Response object with all details about the Ansible run, or nil
@@ -52,6 +52,25 @@ module Ansible
           :debug    => debug,
           :ident    => ident
         }
+      end
+
+      # Waits for the async process to complete or hit the given timeout
+      #
+      # @param timeout [Integer, ActiveSupport::Duration] Number of seconds to wait for the process to complete
+      # @return [Ansible::Runner::Response] Response object with all details about the Ansible run
+      def wait(timeout)
+        result = nil
+        # Poll every 0.1s until complete
+        (0.1..timeout).step(0.1) do
+          result = response
+          result ? break : sleep(0.1)
+        end
+        # If the process is still running, then stop it
+        if result.nil?
+          stop
+          result = response
+        end
+        result
       end
 
       # Creates the Ansible::Runner::ResponseAsync object from hash data

@@ -23,6 +23,9 @@ KEY
 
 echo "== Checking MIQ database status =="
 
+mkdir -p /var/run/postgresql
+chown postgres:postgres /var/run/postgresql
+
 [[ -d /var/lib/pgsql/data/base ]]
 if [ $? -eq 0 ]; then
   echo "** DB already initialized"
@@ -67,4 +70,4 @@ fi
 
 rm -f /var/www/miq/vmdb/tmp/pids/evm.pid
 
-exec ruby /var/www/miq/vmdb/lib/workers/bin/evm_server.rb
+exec ruby /usr/lib/manageiq/manageiq/lib/workers/bin/evm_server.rb

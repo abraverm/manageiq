@@ -25,20 +25,20 @@ module ManageIQ
 
     def create_plugin_files
       template "%plugin_name%.gemspec"
-      template ".codeclimate.yml"
+      template ".github/workflows/ci.yaml"
       template ".gitignore"
       template ".rspec"
       template ".rspec_ci"
       template ".rubocop.yml"
-      template ".rubocop_cc.yml"
       template ".rubocop_local.yml", :skip => true
-      template ".github/workflows/ci.yaml"
       template ".whitesource"
       template ".yamllint"
+      template "AGENTS.md"
       template "Gemfile"
       template "LICENSE.txt"
       template "Rakefile"
       template "README.md"
+      template "renovate.json"
       template "bin/rails"
       template "bin/setup"
       template "bin/update"
@@ -71,10 +71,11 @@ module ManageIQ
         GITIGNORE
 
         inject_into_file ".gitignore", gitignore, :after => "/spec/manageiq\n"
+        template ".gitattributes"
         template ".yarnrc.yml"
-        template ".yarn/releases/yarn-#{yarn_version}.cjs"
         template "package.json"
         template "yarn.lock"
+        run "yarn set version stable"
       end
     end
 
@@ -137,6 +138,18 @@ module ManageIQ
       @plugin_description ||= "#{plugin_short_name.titleize} plugin for #{Vmdb::Appliance.PRODUCT_NAME}."
     end
 
+    def ruby_versions
+      @ruby_versions ||= core_ci_yaml.dig("jobs", "ci", "strategy", "matrix", "ruby-version").to_a
+    end
+
+    def core_ci_yaml
+      @core_ci_yaml ||= YAML.load_file(core_ci_yaml_path)
+    end
+
+    def core_ci_yaml_path
+      Rails.root.join(".github/workflows/ci.yaml")
+    end
+
     def node_version
       @node_version ||= package_json.dig("engines", "node")
     end
@@ -145,24 +158,12 @@ module ManageIQ
       @npm_version ||= package_json.dig("engines", "npm")
     end
 
-    def yarn_version
-      @yarn_version ||= Dir.glob(template_yarn_releases_path.join("yarn-*.cjs")).first.match(/yarn-(.+).cjs/).captures.first
-    end
-
-    def package_manager
-      @package_manager ||= "yarn@#{yarn_version}"
-    end
-
     def package_json
       @package_json ||= JSON.parse(File.read(ui_classic_package_json_path))
     end
 
     def ui_classic_package_json_path
       ManageIQ::UI::Classic::Engine.root.join("package.json")
-    end
-
-    def template_yarn_releases_path
-      Rails.root.join("lib/generators/manageiq/plugin/templates/.yarn/releases")
     end
 
     def empty_directory_with_keep_file(destination, config = {})

@@ -33,10 +33,12 @@ class MiqWorker
     end
 
     def add_readiness_probe(container_definition)
+      starting_timeout = self.class.worker_settings[:starting_timeout] || 3
+
       container_definition[:readinessProbe] = {
         :httpGet             => {:path => "/ping", :port => HEALTH_PORT},
         :initialDelaySeconds => 60,
-        :timeoutSeconds      => 3
+        :timeoutSeconds      => starting_timeout
       }
     end
 
@@ -45,8 +47,6 @@ class MiqWorker
 
       container = definition[:spec][:template][:spec][:containers].first
       container[:ports] = [{:containerPort => SERVICE_PORT}, {:containerPort => HEALTH_PORT}]
-      container[:env] << {:name => "PORT", :value => container_port.to_s}
-      container[:env] << {:name => "BINDING_ADDRESS", :value => "0.0.0.0"}
       container[:volumeMounts] ||= []
       definition[:spec][:template][:spec][:volumes] ||= []
     end
@@ -67,6 +67,10 @@ class MiqWorker
 
     def container_image
       ENV["WEBSERVER_WORKER_IMAGE"] || default_image
+    end
+
+    def container_environment_variables
+      super.merge("PORT" => container_port.to_s, "BINDING_ADDRESS" => "0.0.0.0")
     end
   end
 end

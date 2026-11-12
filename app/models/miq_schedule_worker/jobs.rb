@@ -133,6 +133,10 @@ class MiqScheduleWorker::Jobs
     queue_work(:class_name => "MiqReportResult", :method_name => "purge_timer", :zone => nil)
   end
 
+  def request_log_purge_timer
+    queue_work(:class_name => "RequestLog", :method_name => "purge_timer", :zone => nil)
+  end
+
   def archived_entities_purge_timer
     queue_work(:class_name => "Container", :method_name => "purge_timer", :zone => nil)
     queue_work(:class_name => "ContainerNode", :method_name => "purge_timer", :zone => nil)
@@ -193,6 +197,9 @@ class MiqScheduleWorker::Jobs
   end
 
   def generate_chargeback_for_service(args = {})
+    # Only queue chargeback report generation if the reporting role is enabled for any server in the region.
+    return unless MiqRegion.my_region.role_assigned?("reporting")
+
     queue_work(:class_name => "Service", :method_name => "queue_chargeback_reports", :zone => nil, :args => args)
   end
 

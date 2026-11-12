@@ -3,7 +3,9 @@
 if [ -n "$CI" ]; then
   echo "== Installing system packages =="
   sudo apt-get update
-  sudo apt-get install -y libcurl4-openssl-dev
+  sudo apt-get install -y libcurl4-openssl-dev libssh2-1-dev
+  # libjitterentropy3 is only available on resolute/26.04
+  sudo apt-get install -y libjitterentropy3-dev || true
   echo
 fi
 
@@ -17,4 +19,8 @@ if [ -n "$MANAGEIQ_REPO" ]; then
 elif [ ! -d "$spec_manageiq" ]; then
   echo "== Cloning manageiq sample app =="
   git clone https://github.com/ManageIQ/manageiq.git --branch master --depth 1 "$spec_manageiq"
+fi
+
+if [ -n "$CI" ]; then
+  $spec_manageiq/bin/ci/setup_plugin_gemfile_lock
 fi

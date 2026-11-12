@@ -1,6 +1,5 @@
-raise "Ruby versions < 3.0.0 are unsupported!"  if RUBY_VERSION < "3.0.0"
-raise "Ruby versions >= 3.2.0 are unsupported!" if RUBY_VERSION >= "3.2.0"
-
+ruby ">= 3.3.1", "< 3.5.0"
+warn "Ruby versions >= 3.4.0 are untested!" if RUBY_VERSION >= "3.4.0"
 source 'https://rubygems.org'
 
 plugin "bundler-inject", "~> 2.0"
@@ -22,74 +21,72 @@ manageiq_plugin "manageiq-schema"
 
 # Unmodified gems
 gem "activerecord-session_store",       "~>2.0"
-gem "activerecord-virtual_attributes",  "~>6.1.2"
+gem "activerecord-virtual_attributes",  "~>8.1.0"
 gem "acts_as_tree",                     "~>2.7" # acts_as_tree needs to be required so that it loads before ancestry
 gem "ancestry",                         "~>4.1.0",           :require => false
 gem "awesome_spawn",                    "~>1.6",             :require => false
 gem "aws-sdk-s3",                       "~>1.0",             :require => false # For FileDepotS3
 gem "bcrypt",                           "~> 3.1.10",         :require => false
 gem "bootsnap",                         ">= 1.8.1",          :require => false # for psych 3.3.2+ / 4 unsafe_load
-gem "bundler",                          "~> 2.1", ">= 2.1.4", "!= 2.2.10", :require => false
+gem "bundler",                          ">= 2.5.20", "< 5",  :require => false
 gem "byebug",                                                :require => false
-gem "color",                            "~>1.8"
-gem "config",                           "~>2.2", ">=2.2.3",  :require => false
-gem "connection_pool",                                       :require => false # For Dalli
-gem "dalli",                            "~>3.2.3",           :require => false
-gem "default_value_for",                "~>3.3"
+gem "config",                           "~>5.1",             :require => false
+gem "connection_pool",                  "~>2.5",             :require => false # For Dalli
+gem "dalli",                            "~>3.2.15",          :require => false
+gem "default_value_for",                "~>4.0"
 gem "docker-api",                       "~>1.33.6",          :require => false
-gem "elif",                             "=0.1.0",            :require => false
-gem "fast_gettext",                     "~>2.0.1"
+gem "drb",                              "~>2.2",             :require => false
+gem "fast_gettext",                     "~>3.1"
+gem "ffi",                              "< 1.17.0",          :require => false # Locked down due to build issue assertion failure on 1.17.3
 gem "gettext_i18n_rails",               "~>1.11"
 gem "gettext_i18n_rails_js",            "~>1.3.0"
 gem "hamlit",                           "~>2.11.0"
 gem "inifile",                          "~>3.0",             :require => false
-gem "inventory_refresh",                "~>2.1",             :require => false
+gem "inventory_refresh",                "~>2.4",             :require => false
 gem "kubeclient",                       "~>4.0",             :require => false # For scaling pods at runtime
-gem "linux_admin",                      "~>2.0", ">=2.0.1",  :require => false
+gem "linux_admin",                      ">=3.0", "<5",       :require => false
 gem "listen",                           "~>3.2",             :require => false
-gem "manageiq-api-client",              "~>0.3.6",           :require => false
-gem "manageiq-loggers",                 "~>1.0", ">=1.1.1",  :require => false
-gem "manageiq-messaging",               "~>1.0", ">=1.4.1",  :require => false
+gem "manageiq-api-client",              "~>0.7",             :require => false
+gem "manageiq-loggers",                 "~>2.0",             :require => false
+gem "manageiq-messaging",               "~>2.2",             :require => false
 gem "manageiq-password",                "~>1.0",             :require => false
-gem "manageiq-postgres_ha_admin",       "~>3.2",             :require => false
-gem "manageiq-ssh-util",                "~>0.1.1",           :require => false
+gem "manageiq-postgres_ha_admin",       "~>3.5",             :require => false
+gem "manageiq-ssh-util",                "~>0.2.0",           :require => false
 gem "memoist",                          "~>0.16.0",          :require => false
 gem "money",                            "~>6.13.5",          :require => false
 gem "more_core_extensions"                                                     # min version should be set in manageiq-gems-pending, not here
-gem "net-ftp",                          "~>0.1.2",           :require => false
-gem "net-ldap",                         "~>0.16.1",          :require => false
 gem "net-ping",                         "~>1.7.4",           :require => false
 gem "openscap",                         "~>0.4.8",           :require => false
 gem "optimist",                         "~>3.0",             :require => false
-gem "pg",                               ">=1.4.1",           :require => false
+gem "pg",                               ">=1.6.3.1",         :require => false, :source => "https://rubygems.manageiq.org"
 gem "pg-dsn_parser",                    "~>0.1.1",           :require => false
+gem "prism",                            ">=0.25.0",          :require => false # Used by DescendantLoader
 gem "psych",                            ">=3.1",             :require => false # 3.1 safe_load changed positional to kwargs like aliases: true: https://github.com/ruby/psych/commit/4d4439d6d0adfcbd211ea295779315f1baa7dadd
-gem "query_relation",                   "~>0.1.0",           :require => false
-gem "rack",                             ">=2.2.6.4",         :require => false
-gem "rack-attack",                      "~>6.5.0",           :require => false
-gem "rails",                            "~>6.1.7", ">=6.1.7.7"
-gem "rails-i18n",                       "~>6.x"
+gem "query_relation",                   "~>0.2.0",           :require => false
+gem "rack",                             ">=2.2.25",          :require => false
+gem "rack-attack",                      "~>6.8.0",           :require => false
+gem "rails",                            "~>8.1.4", ">=8.1.4.1"
+gem "rails-i18n",                       "~>8.1.0"
 gem "rake",                             ">=12.3.3",          :require => false
 gem "rest-client",                      "~>2.1.0",           :require => false
-gem "ripper_ruby_parser",               "~>1.11",            :require => false
-gem "ruby-progressbar",                 "~>1.7.0",           :require => false
-gem "rubyzip",                          "~>2.0.0",           :require => false
-gem "rugged",                           "~>1.5.0",           :require => false
+gem "ruby_parser",                                           :require => false # Required for i18n string extraction, and DescentdantLoader (via prism)
+gem "ruby-progressbar",                 "~>1.13.0",           :require => false
+gem "rugged",                           "~>1.9",             :require => false
 gem "ruport",                           "~>1.8.0"
-gem "snmp",                             "~>1.2.0",           :require => false
+gem "snmp",                             "~>1.3.0",           :require => false
 gem "sprockets",                        "~>3.7.2",           :require => false
 gem "sync",                             "~>0.5",             :require => false
-gem "sys-filesystem",                   "~>1.4.3"
 gem "terminal",                                              :require => false
 gem "wim_parser",                       "~>1.0",             :require => false
+gem "zxcvbn-ruby",                      "~>2.0",             :require => false
 
 # gems to resolve security issues
-# CVE-2021-33621 fixed: ruby 3.1.4 - https://github.com/advisories/GHSA-vc47-6rqg-c7f5
-gem "cgi",  "~> 0.3.5"
-# CVE-2023-28756 fixed: ruby 3.1.4 - https://github.com/advisories/GHSA-fg7x-g82r-94qc
-gem "time", "~> 0.2.2"
-# CVE-2023-36617 https://github.com/advisories/GHSA-hww2-5g85-429m
-gem "uri",  ">= 0.12.2"
+gem "cgi",  "~> 0.5"
+gem "erb",  ">= 6.0.4"  # CVE-2026-41316: https://github.com/advisories/GHSA-q339-8rmv-2mhv; Dependency of irb -> rdoc -> erb
+gem "faraday", "~> 2.14", ">= 2.14.2" # CVE-2026-33637: https://github.com/advisories/GHSA-5rv5-xj5j-3484
+gem "uri",  "~> 0.13.3" # CVE-2025-61594: https://www.ruby-lang.org/en/news/2025/10/07/uri-cve-2025-61594/
+                        # Avoid URI 1.0.0 for now due to: https://github.com/ruby/uri/issues/125
+gem "thor", ">= 1.4.0"   # CVE-2025-54314: https://github.com/advisories/GHSA-mqcp-p2hv-vw6x
 
 # Custom gem that replaces mime-types in order to redirect mime-types calls to mini_mime
 #   Source is located at https://github.com/ManageIQ/mime-types-redirector
@@ -131,10 +128,20 @@ end
 
 group :azure_stack, :manageiq_default do
   manageiq_plugin "manageiq-providers-azure_stack"
+  gem "azure_mgmt_compute",   "~> 0.22.0.1", :require => false, :source => "https://rubygems.manageiq.org"
+  gem "azure_mgmt_monitor",   "~> 0.19.0.1", :require => false, :source => "https://rubygems.manageiq.org"
+  gem "azure_mgmt_network",   "~> 0.26.1.1", :require => false, :source => "https://rubygems.manageiq.org"
+  gem "azure_mgmt_resources", "~> 0.18.2.1", :require => false, :source => "https://rubygems.manageiq.org"
+  gem "ms_rest",              "~> 0.7.6.1",  :require => false, :source => "https://rubygems.manageiq.org"
+  gem "ms_rest_azure",        "~> 0.12.0.1", :require => false, :source => "https://rubygems.manageiq.org"
 end
 
 group :cisco_intersight, :manageiq_default do
   manageiq_plugin "manageiq-providers-cisco_intersight"
+end
+
+group :embedded_terraform, :manageiq_default do
+  manageiq_plugin "manageiq-providers-embedded_terraform"
 end
 
 group :foreman, :manageiq_default do
@@ -181,12 +188,16 @@ group :nsxt, :manageiq_default do
   manageiq_plugin "manageiq-providers-nsxt"
 end
 
-group :nuage, :manageiq_default do
-  manageiq_plugin "manageiq-providers-nuage"
+group :nutanix, :manageiq_default do
+  manageiq_plugin "manageiq-providers-nutanix"
 end
 
 group :oracle_cloud, :manageiq_default do
   manageiq_plugin "manageiq-providers-oracle_cloud"
+end
+
+group :proxmox, :manageiq_default do
+  manageiq_plugin "manageiq-providers-proxmox"
 end
 
 group :redfish, :manageiq_default do
@@ -195,6 +206,14 @@ end
 
 group :red_hat_virtualization, :manageiq_default do
   manageiq_plugin "manageiq-providers-red_hat_virtualization"
+end
+
+group :scvmm, :manageiq_default do
+  manageiq_plugin "manageiq-providers-scvmm"
+end
+
+group :terraform_enterprise, :manageiq_default do
+  manageiq_plugin "manageiq-providers-terraform_enterprise"
 end
 
 group :qpid_proton, :optional => true do
@@ -227,11 +246,6 @@ group :workflows, :manageiq_default do
   manageiq_plugin "manageiq-providers-workflows"
 end
 
-### shared dependencies
-group :google, :openshift, :manageiq_default do
-  gem "sshkey",                         "~>1.8.0",           :require => false
-end
-
 ### end of provider bundler groups
 
 group :automate, :seed, :manageiq_default do
@@ -247,17 +261,16 @@ group :rest_api, :manageiq_default do
 end
 
 group :scheduler, :manageiq_default do
-  gem "rufus-scheduler"
+  gem "rufus-scheduler", ">=3.9.2" # CVE-2024-43380
+  gem "et-orbi", ">= 1.3" # indirect of rufus-scheduler
 end
-# rufus has et-orbi dependency, v1.2.2 has patch for ConvertTimeToEoTime that we need
-gem "et-orbi",                          ">= 1.2.2"
 
 group :seed, :manageiq_default do
   manageiq_plugin "manageiq-content"
 end
 
 group :smartstate, :manageiq_default do
-  gem "manageiq-smartstate",            "~>0.9.0",           :require => false
+  gem "manageiq-smartstate",            "~>0.13",            :require => false
 end
 
 group :consumption, :manageiq_default do
@@ -268,42 +281,37 @@ group :ui_dependencies do # Added to Bundler.require in config/application.rb
   manageiq_plugin "manageiq-decorators"
   manageiq_plugin "manageiq-ui-classic"
   # Modified gems (forked on Github)
-  gem "jquery-rjs",                     "=0.1.1.3",          :source => "https://rubygems.manageiq.org"
+  gem "jquery-rjs",                     "=0.1.1.5",          :source => "https://rubygems.manageiq.org"
 end
 
 group :web_server, :manageiq_default do
-  gem "puma",                           "~>6.4", ">=6.4.2"
+  gem "puma",                           "~>8.0", ">=8.0.2"
   gem "ruby-dbus" # For external auth
-  gem "secure_headers",                 "~>3.9"
+  gem "secure_headers",                 "~>7.3"
 end
 
 group :web_socket, :manageiq_default do
-  gem "surro-gate",                     "~>1.0.5",           :require => false
-  gem "websocket-driver",               "~>0.6.3",           :require => false
+  gem "surro-gate",                     "~>1.0.6",           :require => false
+  gem "websocket-driver",               "~>0.8", ">=0.8.2",  :require => false
 end
 
 group :appliance, :optional => true do
-  gem "irb",                            "=1.4.1",            :require => false # Locked to same version as the installed RPM rubygem-irb-1.4.1-142.module_el9+787+b20bfeee.noarch so that we don't bundle our own
-  gem "manageiq-appliance_console",     "~>9.0", ">= 9.0.1", :require => false
-  gem "rdoc",                                                :require => false # Needed for rails console
+  gem "manageiq-appliance_console",     "~>13.0",            :require => false
 end
 
 ### Development and test gems are excluded from appliance and container builds to reduce size and license issues
 group :development do
   gem "foreman"
-  gem "manageiq-style",                 "~>1.5.0",           :require => false
+  gem "manageiq-style",                 "~>1.6", ">=1.6.1",  :require => false
   gem "PoParser"
-  # ruby_parser is required for i18n string extraction
-  gem "ruby_parser",                                         :require => false
   gem "yard",                           ">= 0.9.36"
 end
 
 group :test do
-  gem "brakeman",                       "~>5.4",             :require => false
+  gem "brakeman",                       "~>8.0",             :require => false
   gem "bundler-audit",                                       :require => false
-  gem "capybara",                       "~>2.5.0",           :require => false
-  gem "db-query-matchers",              "~>0.10.0"
-  gem "factory_bot",                    "~>5.1",             :require => false
+  gem "db-query-matchers",              "~>0.15.0"
+  gem "factory_bot",                    "~>6.5",             :require => false
   gem "simplecov",                      ">=0.21.2",          :require => false
   gem "timecop",                        "~>0.9", "!= 0.9.7", :require => false
   gem "vcr",                            "~>6.1",             :require => false
@@ -311,7 +319,10 @@ group :test do
 end
 
 group :development, :test do
-  gem "parallel_tests",                 "~>4.4", :require => false
-  gem "routes_lazy_routes"
-  gem "rspec-rails",                    "~>4.0.1"
+  gem "cypress-on-rails",               "~>1.20.0", :require => false # Dependency is needed in the rails app.  It's required in ui-classic engine.rb.
+  gem "database_cleaner",               "~>2.1",    :require => false # Used by cypress-on-rails.
+  gem "factory_bot_rails",              "~>6.5.1",  :require => false # Used by cypress-on-rails.
+
+  gem "parallel_tests",                 "~>5.6",    :require => false
+  gem "rspec-rails",                    "~>8.0"
 end

@@ -25,6 +25,7 @@ module CustomAttributeMixin
       define_method(getter) do
         miq_custom_get(custom_str)
       end
+      # NOTE: the other custom attributes use arel, and the getter uses has_attribute?()
       virtual_column getter, :type => :string  # uses not set since miq_custom_get re-queries
 
       define_method(setter) do |value|
@@ -51,14 +52,14 @@ module CustomAttributeMixin
     def self.add_custom_attribute(custom_attribute)
       return if respond_to?(custom_attribute)
 
-      ActiveSupport::Deprecation.warn(invalid_custom_attribute_message(custom_attribute)) unless CUSTOM_ATTRIBUTE_VALID_NAME_REGEXP.match?(custom_attribute.to_s)
+      Vmdb::Deprecation.warn(invalid_custom_attribute_message(custom_attribute)) unless CUSTOM_ATTRIBUTE_VALID_NAME_REGEXP.match?(custom_attribute.to_s)
 
       ca_sym                 = custom_attribute.to_sym
       without_prefix         = custom_attribute.sub(CUSTOM_ATTRIBUTES_PREFIX, "")
       name_val, section      = without_prefix.split(SECTION_SEPARATOR)
       ca_arel                = custom_attribute_arel(name_val, section)
 
-      virtual_column(ca_sym, :type => :string, :uses => :custom_attributes, :arel => ca_arel)
+      virtual_attribute ca_sym, :string, :uses => :custom_attributes, :arel => ca_arel
 
       define_method(ca_sym) do
         return self[custom_attribute] if has_attribute?(custom_attribute)
@@ -115,7 +116,7 @@ module CustomAttributeMixin
   def miq_custom_set(key, value)
     return miq_custom_delete(key) if value.blank?
 
-    ActiveSupport::Deprecation.warn(self.class.invalid_custom_attribute_message(key)) unless self.class::CUSTOM_ATTRIBUTE_VALID_NAME_REGEXP.match?(key.to_s)
+    Vmdb::Deprecation.warn(self.class.invalid_custom_attribute_message(key)) unless self.class::CUSTOM_ATTRIBUTE_VALID_NAME_REGEXP.match?(key.to_s)
 
     record = miq_custom_attributes.find_by(:name => key.to_s)
     if record.nil?

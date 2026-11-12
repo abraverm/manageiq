@@ -1,20 +1,15 @@
 # ManageIQ
 
-[![CI](https://github.com/ManageIQ/manageiq/actions/workflows/ci.yaml/badge.svg)](https://github.com/ManageIQ/manageiq/actions/workflows/ci.yaml)
-[![Code Climate](https://codeclimate.com/github/ManageIQ/manageiq/badges/gpa.svg)](https://codeclimate.com/github/ManageIQ/manageiq)
-[![Codacy](https://api.codacy.com/project/badge/grade/9ffce48ccb924020ae8f9e698048e9a4)](https://www.codacy.com/app/ManageIQ/manageiq)
-[![Coverage Status](https://coveralls.io/repos/ManageIQ/manageiq/badge.svg?branch=master&service=github)](https://coveralls.io/github/ManageIQ/manageiq?branch=master)
+[![CI](https://github.com/ManageIQ/manageiq/actions/workflows/ci.yaml/badge.svg?branch=master)](https://github.com/ManageIQ/manageiq/actions/workflows/ci.yaml)
 
 [![License](http://img.shields.io/badge/license-APACHE2-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0.html)
-[![Chat](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/ManageIQ/manageiq?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+[![Chat](https://matrix.to/img/matrix-badge.svg)](https://matrix.to/#/#ManageIQ_manageiq:gitter.im)
 [![Translate](https://img.shields.io/badge/translate-transifex-blue.svg)](https://www.transifex.com/manageiq/manageiq/dashboard/)
 [![Open Source Helpers](https://www.codetriage.com/manageiq/manageiq/badges/users.svg)](https://www.codetriage.com/manageiq/manageiq)
 
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/4282/badge)](https://www.bestpractices.dev/projects/4282)
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/ManageIQ/manageiq/badge)](https://securityscorecards.dev/viewer/?uri=github.com/ManageIQ/manageiq)
 [![CNCF Landscape](https://img.shields.io/badge/CNCF%20Landscape-5699C6?logo=cncf)](https://landscape.cncf.io/?item=provisioning--automation-configuration--manageiq)
-
-[![Build history for master branch](https://buildstats.info/github/chart/ManageIQ/manageiq?branch=master&buildCount=50&includeBuildsFromPullRequest=false&showstats=false)](https://github.com/ManageIQ/manageiq/actions?query=branch%3Amaster)
 
 ## Discover, Optimize, and Control your Hybrid IT
 

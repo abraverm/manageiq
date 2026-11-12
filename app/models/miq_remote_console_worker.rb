@@ -23,11 +23,11 @@ class MiqRemoteConsoleWorker < MiqWorker
     super
 
     definition[:spec][:template][:spec][:containers].first[:volumeMounts] << {:name => "remote-console-httpd-config", :mountPath => "/etc/httpd/conf.d"}
-    definition[:spec][:template][:spec][:volumes] << {:name => "remote-console-httpd-config", :configMap => {:name => "remote-console-httpd-configs", :defaultMode => 420}}
+    definition[:spec][:template][:spec][:volumes] << {:name => "remote-console-httpd-config", :configMap => {:name => "remote-console-httpd-configs", :defaultMode => 0o644}}
 
     if ENV["REMOTE_CONSOLE_SSL_SECRET_NAME"].present?
       definition[:spec][:template][:spec][:containers].first[:volumeMounts] << {:name => "remote-console-httpd-ssl", :mountPath => "/etc/pki/tls"}
-      definition[:spec][:template][:spec][:volumes] << {:name => "remote-console-httpd-ssl", :secret => {:secretName => ENV["REMOTE_CONSOLE_SSL_SECRET_NAME"], :items => [{:key => "remote_console_crt", :path => "certs/server.crt"}, {:key => "remote_console_key", :path => "private/server.key"}], :defaultMode => 400}}
+      definition[:spec][:template][:spec][:volumes] << {:name => "remote-console-httpd-ssl", :secret => {:secretName => ENV["REMOTE_CONSOLE_SSL_SECRET_NAME"], :items => [{:key => "remote_console_crt", :path => "certs/server.crt"}, {:key => "remote_console_key", :path => "private/server.key"}], :defaultMode => 0o440}}
     end
   end
 end

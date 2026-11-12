@@ -22,7 +22,7 @@ class MiqRequest < ApplicationRecord
 
   alias_attribute :state, :request_state
 
-  serialize   :options, Hash
+  serialize   :options, :type => Hash
 
   default_value_for(:message)       { |r| "#{r.class::TASK_DESCRIPTION} - Request Created" }
   default_value_for :options,       {}
@@ -51,7 +51,6 @@ class MiqRequest < ApplicationRecord
   virtual_column  :v_workflow_class,     :type => :string,   :uses => :workflow
   virtual_column  :request_type_display, :type => :string
   virtual_column  :resource_type,        :type => :string
-  virtual_column  :state,                :type => :string
 
   delegate :allowed_tags,                :to => :workflow,   :prefix => :v,  :allow_nil => true
   delegate :class,                       :to => :workflow,   :prefix => :v_workflow
@@ -81,6 +80,9 @@ class MiqRequest < ApplicationRecord
     :Service        => {
       :MiqProvisionConfiguredSystemRequest => {
         :provision_via_foreman => N_("%{config_mgr_type} Provision") % {:config_mgr_type => ui_lookup(:ui_title => 'foreman')}
+      },
+      :MiqProvisionConfigurationScriptRequest => {
+        :provision_via_automation_manager => N_("Automation Provider Provision")
       },
       :MiqProvisionRequest                 => {
         :template          => N_("VM Provision"),
@@ -121,7 +123,8 @@ class MiqRequest < ApplicationRecord
   }.freeze
 
   REQUEST_TYPES_BACKEND_ONLY = {
-    :MiqProvisionRequestTemplate              => {:template            => "VM Provision Template"},
+    :MiqProvisionRequestTemplate                    => {:template            => "VM Provision Template"},
+    :MiqProvisionConfigurationScriptRequestTemplate => {:provision_via_automation_manager => "Configuration Script Template"}
   }
 
   REQUEST_TYPES = MODEL_REQUEST_TYPES.values.each_with_object(REQUEST_TYPES_BACKEND_ONLY) { |i, h| i.each { |k, v| h[k] = v } }

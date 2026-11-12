@@ -8,6 +8,7 @@ class VmOrTemplate < ApplicationRecord
   include RetirementMixin
   include ScanningMixin
   include SupportsFeatureMixin
+  include SupportsAttribute
   include EmsRefreshMixin
 
   self.table_name = 'vms'
@@ -35,32 +36,44 @@ class VmOrTemplate < ApplicationRecord
 
   VENDOR_TYPES = {
     # DB            Displayed
-    "azure"         => "Azure",
-    "azure_stack"   => "AzureStack",
-    "vmware"        => "VMware",
-    "microsoft"     => "Microsoft",
-    "xen"           => "XenSource",
-    "parallels"     => "Parallels",
-    "amazon"        => "Amazon",
-    "redhat"        => "Red Hat",
-    "ovirt"         => "oVirt",
-    "openstack"     => "OpenStack",
-    "oracle"        => "Oracle",
-    "google"        => "Google",
-    "kubevirt"      => "KubeVirt",
-    "ibm_cloud"     => "IBM Cloud",
-    "ibm_power_vs"  => "IBM Power Systems Virtual Server",
-    "ibm_power_vc"  => "IBM PowerVC",
-    "ibm_power_hmc" => "IBM Power HMC",
-    "ibm_z_vm"      => "IBM Z/VM",
-    "unknown"       => "Unknown"
+    "azure"           => "Azure",
+    "azure_stack"     => "AzureStack",
+    "vmware"          => "VMware",
+    "microsoft"       => "Microsoft",
+    "xen"             => "XenSource",
+    "parallels"       => "Parallels",
+    "amazon"          => "Amazon",
+    "redhat"          => "Red Hat",
+    "ovirt"           => "oVirt",
+    "openstack"       => "OpenStack",
+    "openshift_infra" => "OpenShift Virtualization",
+    "oracle"          => "Oracle",
+    "google"          => "Google",
+    "kubevirt"        => "KubeVirt",
+    "nutanix"         => "Nutanix",
+    "ibm_cloud"       => "IBM Cloud",
+    "ibm_power_vs"    => "IBM Power Systems Virtual Server",
+    "ibm_power_vc"    => "IBM PowerVC",
+    "ibm_power_hmc"   => "IBM Power HMC",
+    "ibm_z_vm"        => "IBM Z/VM",
+    "proxmox"         => "Proxmox VE",
+    "unknown"         => "Unknown"
   }
+
+  HEALTH_STATES = {
+    "ok"       => N_("Ok"),
+    "warning"  => N_("Warning"),
+    "error"    => N_("Error"),
+    "critical" => N_("Critical"),
+    "unknown"  => N_("Unknown")
+  }.freeze
 
   POWER_OPS = %w[start stop suspend reset shutdown_guest standby_guest reboot_guest]
   REMOTE_REGION_TASKS = POWER_OPS + %w[retire_now]
 
   validates_presence_of     :name, :location
   validates                 :vendor, :inclusion => {:in => VENDOR_TYPES.keys}
+  validates                 :health_state, :inclusion => {:in => HEALTH_STATES.keys}, :allow_nil => true
 
   has_one                   :operating_system, :dependent => :destroy
   has_one                   :openscap_result, :as => :resource, :dependent => :destroy
@@ -185,20 +198,27 @@ class VmOrTemplate < ApplicationRecord
   virtual_has_one   :service,              :class_name => 'Service'
   virtual_has_one   :parent_resource,      :class_name => "VmOrTemplate"
 
-  virtual_delegate :name, :to => :host, :prefix => true, :allow_nil => true, :type => :string
-  virtual_delegate :name, :to => :storage, :prefix => true, :allow_nil => true, :type => :string
-  virtual_delegate :name, :to => :ems_cluster, :prefix => true, :allow_nil => true, :type => :string
-  virtual_delegate :vmm_product, :to => :host, :prefix => :v_host, :allow_nil => true, :type => :string
-  virtual_delegate :v_pct_free_disk_space, :v_pct_used_disk_space, :to => :hardware, :allow_nil => true, :type => :float
-  virtual_delegate :num_cpu, :to => "hardware.cpu_sockets", :allow_nil => true, :default => 0, :type => :integer
-  virtual_delegate :cpu_total_cores, :cpu_cores_per_socket, :to => :hardware, :allow_nil => true, :default => 0, :type => :integer
-  virtual_delegate :annotation, :to => :hardware, :prefix => "v", :allow_nil => true, :type => :string
-  virtual_delegate :ram_size_in_bytes,                  :to => :hardware, :allow_nil => true, :default => 0, :type => :integer
-  virtual_delegate :mem_cpu,                            :to => "hardware.memory_mb", :allow_nil => true, :default => 0, :type => :integer
-  virtual_delegate :ram_size,                           :to => "hardware.memory_mb", :allow_nil => true, :default => 0, :type => :integer
+  virtual_attribute :host_name, :string, :through => :host, :source => :name
+  virtual_attribute :storage_name, :string, :through => :storage, :source => :name
+  virtual_attribute :ems_cluster_name, :string, :through => :ems_cluster, :source => :name
+  virtual_attribute :v_host_vmm_product, :string, :through => :host, :source => :vmm_product
+  virtual_attribute :v_pct_free_disk_space, :float, :through => :hardware, :source => :v_pct_free_disk_space
+  virtual_attribute :v_pct_used_disk_space, :float, :through => :hardware, :source => :v_pct_used_disk_space
+  virtual_attribute :num_cpu, :integer, :through => :hardware, :source => :cpu_sockets, :default => 0
+  virtual_attribute :cpu_total_cores, :integer, :through => :hardware, :source => :cpu_total_cores, :default => 0
+  virtual_attribute :cpu_cores_per_socket, :integer, :through => :hardware, :source => :cpu_cores_per_socket, :default => 0
+  virtual_attribute :v_annotation, :string, :through => :hardware, :source => :annotation
+  virtual_attribute :ram_size_in_bytes, :integer, :through => :hardware, :source => :ram_size_in_bytes, :default => 0
+  virtual_attribute :mem_cpu, :integer, :through => :hardware, :source => :memory_mb, :default => 0
+  virtual_attribute :ram_size, :integer, :through => :hardware, :source => :memory_mb, :default => 0
 
   delegate :connect_lans, :disconnect_lans, :to => :hardware, :allow_nil => true
   delegate :queue_name_for_ems_operations, :to => :ext_management_system, :allow_nil => true
+
+  supports_attribute :feature => :reconfigure_disks
+  supports_attribute :feature => :reconfigure_disksize
+  supports_attribute :feature => :reconfigure_cdroms
+  supports_attribute :feature => :reconfigure_network_adapters
 
   after_save :save_genealogy_information
 
@@ -601,30 +621,6 @@ class VmOrTemplate < ApplicationRecord
     name ||= genealogy_parent.try(:operating_system).try(:service_pack)
     name ||= ""
     name
-  end
-
-  # Generates the contents of the RSS feed that lists VMs that fail policy
-  def self.rss_fails_policy(_name, options)
-    order(options[:orderby]).limit(options[:limit_to_count]).each_with_object([]) do |vm, result|
-      rec = OpenStruct.new(vm.attributes)
-      if vm.host.nil?
-        rec.host_name = "unknown"
-      else
-        rec.host_name = vm.host.name
-      end
-      rec.vm_id = vm.id
-      rec.reason = []
-      presult = vm.enforce_policy("rsop")
-      if presult[:result] == false
-        presult[:details].each do |p|
-          rec.reason.push(p["description"]) unless p["result"]
-        end
-        if rec.reason != []
-          rec.reason = rec.reason.join(", ")
-          result.push(rec)
-        end
-      end
-    end
   end
 
   def vendor_display
@@ -1198,6 +1194,8 @@ class VmOrTemplate < ApplicationRecord
   end
 
   def archived?
+    return self["archived"] if  has_attribute?("archived")
+
     ems_id.nil? && storage_id.nil?
   end
   alias_method :archived, :archived?
@@ -1206,6 +1204,8 @@ class VmOrTemplate < ApplicationRecord
   end)
 
   def orphaned?
+    return self["orphaned"] if  has_attribute?("orphaned")
+
     ems_id.nil? && !storage_id.nil?
   end
   alias_method :orphaned, :orphaned?
@@ -1214,6 +1214,8 @@ class VmOrTemplate < ApplicationRecord
   end)
 
   def active?
+    return self["active"] if  has_attribute?("active")
+
     !archived? && !orphaned? && !retired? && !template?
   end
   alias_method :active, :active?
@@ -1421,12 +1423,12 @@ class VmOrTemplate < ApplicationRecord
   # Hardware Disks/Memory storage methods
   #
 
-  virtual_delegate :allocated_disk_storage, :used_disk_storage,
-                   :to => :hardware, :allow_nil => true, :uses => {:hardware => :disks}, :type => :integer
+  virtual_attribute :allocated_disk_storage, :integer, :uses => {:hardware => :disks}, :through => :hardware, :source => :allocated_disk_storage
+  virtual_attribute :used_disk_storage, :integer, :uses => {:hardware => :disks}, :through => :hardware, :source => :used_disk_storage
 
-  virtual_delegate :provisioned_storage, :to => :hardware, :allow_nil => true, :default => 0, :type => :integer
-  virtual_delegate :num_disks, :to => :hardware, :allow_nil => true, :default => 0, :type => :integer, :uses => {:hardware => :disks}
-  virtual_delegate :num_hard_disks, :to => :hardware, :allow_nil => true, :default => 0, :type => :integer, :uses => {:hardware => :hard_disks}
+  virtual_attribute :provisioned_storage, :integer, :through => :hardware, :source => :provisioned_storage, :default => 0
+  virtual_attribute :num_disks, :integer, :uses => {:hardware => :disks}, :through => :hardware, :source => :num_disks, :default => 0
+  virtual_attribute :num_hard_disks, :integer, :uses => {:hardware => :hard_disks}, :through => :hardware, :source => :num_hard_disks, :default => 0
 
   def used_storage
     used_disk_storage.to_i + ram_size_in_bytes

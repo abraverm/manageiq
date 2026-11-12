@@ -12,7 +12,7 @@ module Vmdb
 
     private_class_method def self.permission_files
       Vmdb::Plugins.to_a.unshift(Rails)
-        .map { |source| source.root.join("config", "permissions.yml") }
+        .flat_map { |source| [source.root.join("config", "permissions.yml"), source.root.join("config", "permissions", "#{Rails.env}.yml")] }
         .select(&:exist?)
     end
 
@@ -28,6 +28,10 @@ module Vmdb
 
     def supported_ems_type?(type)
       can?("ems-type:#{type}")
+    end
+
+    def supported_ui_menu?(menu)
+      can?("ui-menu:#{menu}")
     end
   end
 end

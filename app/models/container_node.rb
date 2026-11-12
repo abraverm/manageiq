@@ -23,6 +23,10 @@ class ContainerNode < ApplicationRecord
   has_many   :container_services, -> { distinct }, :through => :container_groups
   has_many   :container_routes, -> { distinct }, :through => :container_services
   has_many   :container_replicators, -> { distinct }, :through => :container_groups
+  has_many   :annotations, -> { where(:section => "annotations") }, # rubocop:disable Rails/HasManyOrHasOneDependent
+             :class_name => "CustomAttribute",
+             :as         => :resource,
+             :inverse_of => :resource
   has_many   :labels, -> { where(:section => "labels") }, # rubocop:disable Rails/HasManyOrHasOneDependent
              :class_name => "CustomAttribute",
              :as         => :resource,
@@ -40,12 +44,12 @@ class ContainerNode < ApplicationRecord
   has_many :metrics, :as => :resource
   has_many :metric_rollups, :as => :resource
   has_many :vim_performance_states, :as => :resource
-  has_many :miq_alert_statuses, :as => :resource
+  has_many :miq_alert_statuses, :as => :resource, :dependent => :destroy
   delegate :my_zone, :to => :ext_management_system, :allow_nil => true
 
   virtual_column :ready_condition_status, :type => :string, :uses => :container_conditions
-  virtual_delegate :system_distribution, :to => "operating_system.distribution", :allow_nil => true, :type => :string
-  virtual_delegate :kernel_version, :to => :operating_system, :allow_nil => true, :type => :string
+  virtual_attribute :system_distribution, :string, :through => :operating_system, :source => :distribution
+  virtual_attribute :kernel_version, :string, :through => :operating_system, :source => :kernel_version
 
   def ready_condition_status
     ready_condition.try(:status) || 'None'

@@ -1,5 +1,5 @@
 RSpec.describe Authenticator::Httpd do
-  subject { Authenticator::Httpd.new(config) }
+  subject { Authenticator::Httpd.new(Settings.authentication.to_hash) }
 
   let(:config) { {:httpd_role => false} }
   let(:request) do
@@ -12,25 +12,13 @@ RSpec.describe Authenticator::Httpd do
   let(:username) { request.headers["X-Remote-User"] }
 
   before do
-    # If anything goes looking for the currently configured
-    # Authenticator during any of these tests, we'd really rather they
-    # found the one we're working on.
-    #
-    # This specifically comes up when we auto-create a new user from an
-    # external auth system: they get saved without a password, so User's
-    # dummy_password_for_external_auth hook runs, and it needs to ask
-    # Authenticator#uses_stored_password? whether it's allowed to do anything.
-
+    # Stub authenticator to prevent User.dummy_password_for_external_auth from calling wrong authenticator
+    stub_settings_merge(:authentication => config)
     allow(User).to receive(:authenticator).and_return(subject)
-
     EvmSpecHelper.local_miq_server
-  end
 
-  before do
     FactoryBot.create(:miq_group, :description => 'wibble')
     FactoryBot.create(:miq_group, :description => 'wobble')
-
-    allow(MiqLdap).to receive(:using_ldap?) { false }
   end
 
   describe '#uses_stored_password?' do
@@ -92,12 +80,27 @@ RSpec.describe Authenticator::Httpd do
       {
         'X-Remote-User'           => 'cheshire',
         'X-Remote-User-FullName'  => 'Cheshire Cat',
-        'X-Remote-User-FirstName' => 'Chechire',
+        'X-Remote-User-FirstName' => 'Cheshire',
         'X-Remote-User-LastName'  => 'Cat',
         'X-Remote-User-Email'     => 'cheshire@example.com',
         'X-Remote-User-Domain'    => 'example.com',
         'X-Remote-User-Groups'    => 'wibble@fqdn:bubble@fqdn',
       }
+    end
+
+    it "finds the user based on the downcased X-Remote-User-Principal header" do
+      headers['X-Remote-User-Principal'] = 'cheshire@EXAMPLE.COM'
+      expect(subject.lookup_by_identity('baduser', request)).to eq(cheshire)
+    end
+
+    it "falls back to X-Remote-User when X-Remote-User-Principal is empty string" do
+      headers['X-Remote-User-Principal'] = ''
+      expect(subject.lookup_by_identity('cheshire', request)).to eq(cheshire)
+    end
+
+    it "falls back to X-Remote-User when X-Remote-User-Principal is whitespace" do
+      headers['X-Remote-User-Principal'] = '   '
+      expect(subject.lookup_by_identity('cheshire', request)).to eq(cheshire)
     end
 
     it "Handles missing request parameter" do
@@ -124,22 +127,22 @@ RSpec.describe Authenticator::Httpd do
   describe '#find_or_initialize_user' do
     let(:user_attrs_simple) do
       {:username  => "sal",
-        :fullname  => "Test User Sal",
-        :firstname => "Salvadore",
-        :lastname  => "Bigs",
-        :email     => "sal_email@example.com",
-        :domain    => "example.com"}
+       :fullname  => "Test User Sal",
+       :firstname => "Salvadore",
+       :lastname  => "Bigs",
+       :email     => "sal_email@example.com",
+       :domain    => "example.com"}
     end
 
     let(:identity_simple) { [user_attrs_simple, %w[mumble bumble bee]] }
 
     let(:user_attrs_upn) do
       {:username  => "sal@example.com",
-        :fullname  => "Test User Sal",
-        :firstname => "Salvadore",
-        :lastname  => "Bigs",
-        :email     => "sal_email@example.com",
-        :domain    => "example.com"}
+       :fullname  => "Test User Sal",
+       :firstname => "Salvadore",
+       :lastname  => "Bigs",
+       :email     => "sal_email@example.com",
+       :domain    => "example.com"}
     end
 
     let(:identity_upn) { [user_attrs_upn, %w[mumble bumble bee]] }
@@ -169,6 +172,17 @@ RSpec.describe Authenticator::Httpd do
         'X-Remote-User-Email'     => 'alice@example.com',
         'X-Remote-User-Domain'    => 'example.com',
         'X-Remote-User-Groups'    => 'wibble@fqdn:bubble@fqdn',
+      }
+    end
+
+    let(:user_attrs) do
+      {
+        :username  => "testuser",
+        :fullname  => "Test User",
+        :firstname => "Alice",
+        :lastname  => "Aardvark",
+        :email     => "testuser@example.com",
+        :domain    => "example.com"
       }
     end
 
@@ -632,43 +646,135 @@ RSpec.describe Authenticator::Httpd do
         end
       end
 
-      describe ".user_attrs_from_external_directory_via_dbus" do
+      context "with dbus mocks" do
+        let(:ifp_interface) { double('ifp_interface') }
         before do
           require "dbus"
           sysbus = double('sysbus')
           ifp_service = double('ifp_service')
           ifp_object  = double('ifp_object')
-          @ifp_interface = double('ifp_interface')
 
           allow(DBus).to receive(:system_bus).and_return(sysbus)
           allow(sysbus).to receive(:[]).with("org.freedesktop.sssd.infopipe").and_return(ifp_service)
           allow(ifp_service).to receive(:object).with("/org/freedesktop/sssd/infopipe").and_return(ifp_object)
           allow(ifp_object).to receive(:introspect)
-          allow(ifp_object).to receive(:[]).with("org.freedesktop.sssd.infopipe").and_return(@ifp_interface)
+          allow(ifp_object).to receive(:[]).with("org.freedesktop.sssd.infopipe").and_return(ifp_interface)
         end
 
-        it "should return nil for unspecified user" do
-          expect(subject.send(:user_attrs_from_external_directory_via_dbus, nil)).to be_nil
+        describe ".user_attrs_from_external_directory_via_dbus" do
+          it "should return nil for unspecified user" do
+            expect(subject.send(:user_attrs_from_external_directory_via_dbus, nil)).to be_nil
+          end
+
+          it "should return user attributes hash for valid user" do
+            requested_attrs = %w[mail givenname sn displayname domainname krbPrincipalName]
+
+            jdoe_attrs = [{"mail"             => ["jdoe@example.com"],
+                           "givenname"        => ["John"],
+                           "sn"               => ["Doe"],
+                           "displayname"      => ["John Doe"],
+                           "domainname"       => ["ipa.test"],
+                           "krbPrincipalName" => ["jdoe@IPA.TEST"]}]
+
+            expected_jdoe_attrs = {"mail"             => "jdoe@example.com",
+                                   "givenname"        => "John",
+                                   "sn"               => "Doe",
+                                   "displayname"      => "John Doe",
+                                   "domainname"       => "ipa.test",
+                                   "krbPrincipalName" => "jdoe@IPA.TEST"}
+
+            allow(ifp_interface).to receive(:GetUserAttr).with('jdoe', requested_attrs).and_return(jdoe_attrs)
+
+            result = subject.send(:user_attrs_from_external_directory_via_dbus, 'jdoe')
+            expect(result).to eq(expected_jdoe_attrs)
+          end
+
+          it "should handle missing krbPrincipalName gracefully" do
+            requested_attrs = %w[mail givenname sn displayname domainname krbPrincipalName]
+
+            jdoe_attrs = [{"mail"        => ["jdoe@example.com"],
+                           "givenname"   => ["John"],
+                           "sn"          => ["Doe"],
+                           "displayname" => ["John Doe"],
+                           "domainname"  => ["ipa.test"]}]
+
+            expected_jdoe_attrs = {"mail"             => "jdoe@example.com",
+                                   "givenname"        => "John",
+                                   "sn"               => "Doe",
+                                   "displayname"      => "John Doe",
+                                   "domainname"       => "ipa.test",
+                                   "krbPrincipalName" => nil}
+
+            allow(ifp_interface).to receive(:GetUserAttr).with('jdoe', requested_attrs).and_return(jdoe_attrs)
+
+            expect(subject.send(:user_attrs_from_external_directory_via_dbus, 'jdoe')).to eq(expected_jdoe_attrs)
+          end
         end
 
-        it "should return user attributes hash for valid user" do
-          requested_attrs = %w[mail givenname sn displayname domainname]
+        describe "#user_details_from_external_directory" do
+          it "should normalize krbPrincipalName when present" do
+            requested_attrs = %w[mail givenname sn displayname domainname krbPrincipalName]
 
-          jdoe_attrs = [{"mail"        => ["jdoe@example.com"],
-                         "givenname"   => ["John"],
-                         "sn"          => ["Doe"],
-                         "displayname" => ["John Doe"],
-                         "domainname"  => ["example.com"]}]
+            jdoe_attrs = [{"mail"             => ["jdoe@example.com"],
+                           "givenname"        => ["John"],
+                           "sn"               => ["Doe"],
+                           "displayname"      => ["John Doe"],
+                           "domainname"       => ["ipa.test"],
+                           "krbPrincipalName" => ["jdoe@IPA.TEST"]}]
 
-          expected_jdoe_attrs = {"mail"        => "jdoe@example.com",
-                                 "givenname"   => "John",
-                                 "sn"          => "Doe",
-                                 "displayname" => "John Doe",
-                                 "domainname"  => "example.com"}
+            allow(ifp_interface).to receive(:GetUserAttr).with('jdoe', requested_attrs).and_return(jdoe_attrs)
+            allow(MiqGroup).to receive(:get_httpd_groups_by_user).with('jdoe').and_return([])
 
-          allow(@ifp_interface).to receive(:GetUserAttr).with('jdoe', requested_attrs).and_return(jdoe_attrs)
+            user_attrs, _groups = subject.send(:user_details_from_external_directory, 'jdoe')
+            expect(user_attrs[:username]).to eq("jdoe@ipa.test")
+          end
 
-          expect(subject.send(:user_attrs_from_external_directory_via_dbus, 'jdoe')).to eq(expected_jdoe_attrs)
+          it "should fall back to provided username when krbPrincipalName is empty string" do
+            requested_attrs = %w[mail givenname sn displayname domainname krbPrincipalName]
+
+            jdoe_attrs = [{"mail"             => ["jdoe@example.com"],
+                           "givenname"        => ["John"],
+                           "sn"               => ["Doe"],
+                           "displayname"      => ["John Doe"],
+                           "domainname"       => ["ipa.test"],
+                           "krbPrincipalName" => [""]}]
+
+            allow(ifp_interface).to receive(:GetUserAttr).with('jdoe', requested_attrs).and_return(jdoe_attrs)
+            allow(MiqGroup).to receive(:get_httpd_groups_by_user).with('jdoe').and_return([])
+
+            user_attrs, _groups = subject.send(:user_details_from_external_directory, 'jdoe')
+            expect(user_attrs[:username]).to eq("jdoe")
+          end
+
+          context "integration test: multiple login formats produce same normalized username" do
+            let(:expected_normalized_username) { "flast@ipa.test" }
+            let(:requested_attrs) { %w[mail givenname sn displayname domainname krbPrincipalName] }
+            let(:user_attrs_response) do
+              [{"mail"             => ["first.last@example.com"],
+                "givenname"        => ["First"],
+                "sn"               => ["Last"],
+                "displayname"      => ["First Last"],
+                "domainname"       => ["ipa.test"],
+                "krbPrincipalName" => ["flast@IPA.TEST"]}]
+            end
+
+            before do
+              allow(MiqGroup).to receive(:get_httpd_groups_by_user).and_return([])
+            end
+
+            shared_examples "normalizes to principal name" do |login_format|
+              it "normalizes #{login_format}" do
+                allow(ifp_interface).to receive(:GetUserAttr).with(login_format, requested_attrs).and_return(user_attrs_response)
+                user_attrs, _groups = subject.send(:user_details_from_external_directory, login_format)
+                expect(user_attrs[:username]).to eq(expected_normalized_username)
+              end
+            end
+
+            include_examples "normalizes to principal name", "first.last@example.com"
+            include_examples "normalizes to principal name", "flast@IPA.TEST"
+            include_examples "normalizes to principal name", "flast@ipa.test"
+            include_examples "normalizes to principal name", "flast"
+          end
         end
       end
     end
@@ -702,22 +808,70 @@ RSpec.describe Authenticator::Httpd do
         end
       end
 
-      context "using a comma separated group list" do
+      context "using default delimiters" do
         let(:config) { {:httpd_role => true} }
         let(:headers) do
           super().merge('X-Remote-User-Groups' => 'wibble@fqdn,bubble@fqdn')
         end
+
+        it "parses group names" do
+          expect(subject).to receive(:find_external_identity).with(username, user_attrs, ["wibble@fqdn", "bubble@fqdn"])
+          authenticate
+        end
+      end
+
+      context "using custom delimiter in settings" do
+        let(:config) { {:httpd_role => true, :group_delimiter => ","} }
+        let(:headers) do
+          super().merge('X-Remote-User-Groups' => 'wibble:wobble@fqdn,hobble;bubble@fqdn')
+        end
+
+        it "parses group names that contain characters from the default delimiters (:)" do
+          expect(subject).to receive(:find_external_identity).with(username, user_attrs, ["wibble:wobble@fqdn", "hobble;bubble@fqdn"])
+          authenticate
+        end
+      end
+
+      context "using custom delimiter in settings (despite a header)" do
+        let(:config) { {:httpd_role => true, :group_delimiter => "|"} }
+        let(:headers) do
+          super().merge('X-Remote-User-Groups' => 'wibble,wobble@fqdn|bubble@fqdn', 'X-Remote-User-Group-Delimiter' => ",")
+        end
         let(:user_attrs) do
-          {:username  => "testuser",
+          {
+            :username  => "testuser",
             :fullname  => "Test User",
             :firstname => "Alice",
             :lastname  => "Aardvark",
             :email     => "testuser@example.com",
-            :domain    => "example.com"}
+            :domain    => "example.com"
+          }
         end
 
-        it "handles a comma separated grouplist" do
-          expect(subject).to receive(:find_external_identity).with(username, user_attrs, ["wibble@fqdn", "bubble@fqdn"])
+        it "parses group names that contain characters from header" do
+          expect(subject).to receive(:find_external_identity).with(username, user_attrs, ["wibble,wobble@fqdn", "bubble@fqdn"])
+          authenticate
+        end
+      end
+
+      context "using header delimiter" do
+        let(:config) { {:httpd_role => true} }
+        let(:headers) do
+          super().merge('X-Remote-User-Groups' => 'wibble:wobble@fqdn,bubble@fqdn', 'X-Remote-User-Group-Delimiter' => ",")
+        end
+        let(:user_attrs) do
+          {
+            :username  => "testuser",
+            :fullname  => "Test User",
+            :firstname => "Alice",
+            :lastname  => "Aardvark",
+            :email     => "testuser@example.com",
+            :domain    => "example.com"
+          }
+        end
+
+        it "parses group names that contain characters from default delimiter" do
+          expect(subject).to receive(:find_external_identity).with(username, user_attrs, ["wibble:wobble@fqdn", "bubble@fqdn"])
           authenticate
         end
       end
@@ -726,14 +880,6 @@ RSpec.describe Authenticator::Httpd do
         let(:config) { {:httpd_role => true} }
         let(:headers) do
           super().merge('X-Remote-User-Groups' => CGI.escape('spécial_char@fqdn:moré@fqdn'))
-        end
-        let(:user_attrs) do
-          {:username  => "testuser",
-            :fullname  => "Test User",
-            :firstname => "Alice",
-            :lastname  => "Aardvark",
-            :email     => "testuser@example.com",
-            :domain    => "example.com"}
         end
 
         it "handles group names with escaped special characters" do
@@ -755,13 +901,26 @@ RSpec.describe Authenticator::Httpd do
             'X-Remote-User-Groups'    => nil,
           }
         end
-        let(:user_attrs) do
-          {:username  => "testuser",
-            :fullname  => "Test User",
-            :firstname => "Alice",
-            :lastname  => "Aardvark",
-            :email     => "testuser@example.com",
-            :domain    => "example.com"}
+
+        it "handles nil group names" do
+          expect(subject).to receive(:find_external_identity).with(username, user_attrs, [])
+          authenticate
+        end
+      end
+
+      context "when there are no group names (but a group header)" do
+        let(:config) { {:httpd_role => true} }
+        let(:headers) do
+          {
+            'X-Remote-User'                 => 'testuser',
+            'X-Remote-User-FullName'        => 'Test User',
+            'X-Remote-User-FirstName'       => 'Alice',
+            'X-Remote-User-LastName'        => 'Aardvark',
+            'X-Remote-User-Email'           => 'testuser@example.com',
+            'X-Remote-User-Domain'          => 'example.com',
+            'X-Remote-User-Groups'          => nil,
+            'X-Remote-User-Group-Delimiter' => nil
+          }
         end
 
         it "handles nil group names" do

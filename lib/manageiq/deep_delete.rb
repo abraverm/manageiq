@@ -19,7 +19,6 @@ module ManageIQ
       "ResourcePools"       => 1,
       # MonitorManager => ExtManagementSystem
       "ExtManagementSystem" => 1,
-      # ContainerManager#monitoring_manager (apply_orphan_strategy?)
       # MonitorManager#endpoints: endpoint_destroyed (using this/destroy_queue instead of dependent => destroy)
       # ContainerManager#persistent_volumes (?)
       # InfraManager#orchestration_templates (check_not_in_use (before destroy)
@@ -168,7 +167,7 @@ module ManageIQ
 
       loop do
         if (id = scope.order(pk).limit(1).offset(batch_size).pluck(pk).first)
-          total += yield(scope.where("#{pk} < ?", id))
+          total += yield(scope.where("#{connection.quote_table_name(pk)} < ?", id))
         else
           return total += yield(scope)
         end

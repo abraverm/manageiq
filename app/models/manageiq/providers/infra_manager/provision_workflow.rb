@@ -12,8 +12,10 @@ class ManageIQ::Providers::InfraManager::ProvisionWorkflow < MiqProvisionVirtWor
     #   in the long-term it should be able to deal with multiple hard disks
     virtual_disk_array = vm.hardware.disks.where(:device_type => "disk")
     if virtual_disk_array.length == 1
-      default_size = (vm.hardware.disks.find_by(:device_type => "disk").size / 1.gigabyte).to_s
-      update_values.update({:allocated_disk_storage => default_size})
+      virtual_disk = virtual_disk_array.first
+      default_size = virtual_disk.size.to_f / 1.gigabyte
+
+      update_values.update(:allocated_disk_storage => default_size.to_s) unless default_size.zero?
     end
 
     set_or_default_field_values(update_values)
@@ -52,7 +54,7 @@ class ManageIQ::Providers::InfraManager::ProvisionWorkflow < MiqProvisionVirtWor
     if result[:folder_id].nil?
       add_target(:placement_dc_name, :datacenter, EmsFolder, result)
     else
-      result[:datacenter] = find_datacenter_for_ci(result[:folder], get_ems_metadata_tree(result))
+      result[:datacenter] = find_datacenter_for_ci(result[:folder], get_ems_metadata_tree(result)) unless result[:folder].nil?
       result[:datacenter_id] = result[:datacenter].id unless result[:datacenter].nil?
     end
 

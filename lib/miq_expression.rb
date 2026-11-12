@@ -48,12 +48,16 @@ class MiqExpression
       validate_keys.all? { |k| valid?(component[operator][k]) }
     else
       if component[operator].key?("field")
-        field = Field.parse(component[operator]["field"])
-        return false if field && !field.valid?
+        # For parent operator "checkcount", can use "field" => "<count>" (which would blow up Field.parse)
+        unless component[operator]["field"] == "<count>"
+          field = Field.parse(component[operator]["field"])
+          return false unless field&.valid?
+        end
       end
+      # Note: by definition, is_field? ensures field.valid? - need to fix
       if Field.is_field?(component[operator]["value"])
         field = Field.parse(component[operator]["value"])
-        return false unless field && field.valid?
+        return false unless field&.valid?
       end
       true
     end
@@ -288,6 +292,7 @@ class MiqExpression
       if op_args.include?("checkcount")
         check = "checkcount"
         op = op_args[check].keys.first
+        # force "field" => "<count>"
         op_args[check][op]["field"] = "<count>"
       end
       raise _("expression malformed,  must contain one of 'checkall', 'checkany', 'checkcount'") unless check
@@ -316,7 +321,7 @@ class MiqExpression
       start_val, end_val = op_args["value"]
       clause = ruby_for_date_compare(col_ruby, col_type, tz, ">=", start_val, "<=", end_val)
     else
-      raise _("operator '%{operator_name}' is not supported") % {:operator_name => operator.upcase}
+      raise _("operator '%{operator}' is not supported") % {:operator => operator.upcase}
     end
 
     # puts "clause: #{clause}"
@@ -575,14 +580,9 @@ class MiqExpression
     }
   end
 
-  def lenient_evaluate(obj, timezone = nil, prune_sql: false)
+  def evaluate(obj, timezone = nil, prune_sql: false)
     ruby_exp = to_ruby(timezone, :prune_sql => prune_sql)
     ruby_exp.nil? || Condition.subst_matches?(ruby_exp, obj)
-  end
-
-  def evaluate(obj, tz = nil)
-    ruby_exp = to_ruby(tz)
-    Condition.subst_matches?(ruby_exp, obj)
   end
 
   def self.evaluate_atoms(exp, obj)
@@ -804,17 +804,14 @@ class MiqExpression
   def self.quote_human(val, typ)
     case typ&.to_sym
     when :integer, :decimal, :fixnum, :float
-      return val.to_i unless val.to_s.number_with_method? || typ == :float
+      return val if val.kind_of?(Numeric)
+      return val.to_i unless val.to_s.number_with_method?
 
-      if val =~ /^([0-9.,]+)\.([a-z]+)$/
-        val, sfx = $1, $2
-        if sfx.ends_with?("bytes") && FORMAT_BYTE_SUFFIXES.key?(sfx.to_sym)
-          "#{val} #{FORMAT_BYTE_SUFFIXES[sfx.to_sym]}"
-        else
-          "#{val} #{sfx.titleize}"
-        end
+      val, sfx = String::NUMBER_WITH_METHOD_REGEX.match(val.to_s).captures
+      if sfx.ends_with?("bytes") && FORMAT_BYTE_SUFFIXES.key?(sfx.to_sym)
+        "#{val} #{FORMAT_BYTE_SUFFIXES[sfx.to_sym]}"
       else
-        val
+        "#{val} #{sfx.titleize}"
       end
     when :string, :date, :datetime, nil
       "\"#{val}\""
@@ -1542,7 +1539,7 @@ class MiqExpression
       end_val   = RelativeDatetime.normalize(end_val, tz, "end", field.date?)
       arel_attribute.between(start_val..end_val)
     else
-      raise _("operator '%{operator_name}' is not supported") % {:operator_name => operator}
+      raise _("operator '%{operator}' is not supported") % {:operator => operator}
     end
   end
 

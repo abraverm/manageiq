@@ -45,7 +45,6 @@ module EvmSpecHelper
     clear_instance_variable(MiqProductFeature, :@obj_cache) if defined?(MiqProductFeature)
     clear_instance_variable(MiqQueue, :@messaging_client) if defined?(MiqQueue)
     clear_instance_variable(BottleneckEvent, :@event_definitions) if defined?(BottleneckEvent)
-    clear_instance_variable(MiqWorker, :@rails_worker) if defined?(MiqWorker)
     clear_instance_variable(Tenant, :@root_tenant) if defined?(Tenant)
 
     EventStream.clear_event_groups_cache if defined?(EventStream)
@@ -121,7 +120,7 @@ module EvmSpecHelper
   end
 
   def self.remote_miq_server(attrs = {})
-    Tenant.root_tenant || Tenant.create!(:use_config_for_attributes => false)
+    Tenant.root_tenant || Tenant.seed
 
     FactoryBot.create(:miq_server, attrs)
   end

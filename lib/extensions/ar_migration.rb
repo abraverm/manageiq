@@ -25,7 +25,7 @@ module ArPglogicalMigrationHelper
 
     if direction == :up
       if version == SCHEMA_MIGRATIONS_RAN_MIGRATION
-        to_add = ActiveRecord::SchemaMigration.normalized_versions << version
+        to_add = ActiveRecord::Base.connection_pool.schema_migration.normalized_versions << version
       else
         to_add = [version]
       end
@@ -88,13 +88,12 @@ module ArPglogicalMigrationHelper
     end
 
     def restart_subscription
-      c = SubscriptionHelper.establish_connection.connection.raw_connection
-      rep_client = PG::LogicalReplication::Client.new(c)
+      SubscriptionHelper.establish_connection.with_connection do |c|
+        rep_client = PG::LogicalReplication::Client.new(c.raw_connection)
 
-      rep_client.disable_subscription(subscription.id)
-      rep_client.enable_subscription(subscription.id)
-    ensure
-      SubscriptionHelper.remove_connection
+        rep_client.disable_subscription(subscription.id)
+        rep_client.enable_subscription(subscription.id)
+      end
     end
   end
 end

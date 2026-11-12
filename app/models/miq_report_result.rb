@@ -12,7 +12,7 @@ class MiqReportResult < ApplicationRecord
 
   serialize :report
 
-  virtual_delegate :description, :to => :miq_group, :prefix => true, :allow_nil => true, :type => :string
+  virtual_attribute :miq_group_description, :string, :through => :miq_group, :source => :description
   virtual_attribute :status, :string
   virtual_column :status_message,        :type => :string, :uses => :miq_task
   virtual_has_one :result_set,           :class_name => "Hash"
@@ -346,15 +346,6 @@ class MiqReportResult < ApplicationRecord
     # result_type => :csv | :txt | :pdf | :html
     # retrieve the resulting data based on type
     result_type.to_sym == :html ? html_rows : report_results
-  end
-
-  def self.counts_by_userid
-    where("userid NOT LIKE 'widget%'").select("userid, COUNT(id) as count").group("userid")
-      .collect { |rr| {:userid => rr.userid, :count => rr.count.to_i} }
-  end
-
-  def self.orphaned_counts_by_userid
-    counts_by_userid.reject { |h| User.exists?(:userid => h[:userid]) }
   end
 
   def self.delete_by_userid(userids)

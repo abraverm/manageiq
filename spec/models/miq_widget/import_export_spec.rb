@@ -1,8 +1,8 @@
 RSpec.describe MiqWidget::ImportExport do
   context "legacy tests" do
-    before do
-      MiqReport.seed_report("Vendor and Guest OS")
-      @widget_report_vendor_and_guest_os = MiqWidget.sync_from_hash(YAML.load('
+    before { MiqReport.seed_report("Vendor and Guest OS") }
+    let(:widget_report_vendor_and_guest_os) do
+      MiqWidget.sync_from_hash(YAML.load('
       description: report_vendor_and_guest_os
       title: Vendor and Guest OS
       content_type: report
@@ -22,7 +22,7 @@ RSpec.describe MiqWidget::ImportExport do
     end
 
     context "#export_to_array" do
-      subject { @widget_report_vendor_and_guest_os.export_to_array.first }
+      subject { widget_report_vendor_and_guest_os.export_to_array.first }
 
       it "MiqWidget" do
         expect(subject["MiqWidget"]).not_to be_empty
@@ -171,7 +171,6 @@ RSpec.describe MiqWidget::ImportExport do
               userid: system
               prod_default: system
               adhoc:
-              file_depot_id:
               resource_id:
       YAML
 
@@ -203,7 +202,6 @@ RSpec.describe MiqWidget::ImportExport do
         :userid        => "system",
         :prod_default  => "system",
         :adhoc         => nil,
-        :file_depot_id => nil,
         :resource_id   => nil
       )
 

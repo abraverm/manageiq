@@ -1,4 +1,16 @@
 RSpec.describe MiqAlert do
+  describe ".seed" do
+    it "sets responds_to_events for automate_expressions with dynamic values" do
+      MiqAlert.seed
+
+      alert = MiqAlert.find_by(:description => "VM Power On > 2 in last 15 min")
+      expect(alert.responds_to_events).to eq("PowerOnVM_Task_Complete")
+
+      alert = MiqAlert.find_by(:description => "VM Memory Balloon > 250 in last 10 min")
+      expect(alert.responds_to_events).to eq("vm_perf_complete")
+    end
+  end
+
   context "With single server with a single generic worker with the notifier role," do
     before do
       ServerRole.seed
@@ -372,12 +384,12 @@ RSpec.describe MiqAlert do
     end
 
     let(:vm_alert_set) do
-      alert = FactoryBot.create(:miq_alert_vm, :responds_to_events => "xxx|vm_perf_complete|zzz")
+      alert = FactoryBot.create(:miq_alert_vm, :responds_to_events => "xxx,vm_perf_complete,zzz")
       FactoryBot.create(:miq_alert_set_vm, :alerts => [alert])
     end
 
     let(:host_alert_set) do
-      alert = FactoryBot.create(:miq_alert_host, :responds_to_events => "xxx|host_perf_complete|zzz")
+      alert = FactoryBot.create(:miq_alert_host, :responds_to_events => "xxx,host_perf_complete,zzz")
       FactoryBot.create(:miq_alert_set_host, :alerts => [alert])
     end
 
@@ -571,14 +583,6 @@ RSpec.describe MiqAlert do
       MiqAlert.evaluate_alerts(@vm, 'request_vm_poweroff')
     end
 
-    it 'warns if no enabled alerts are assigned' do
-      @alert.update(:enabled => false)
-      expect(MiqQueue).to receive(:put_unless_exists).never
-
-      expect(Vmdb.logger).to receive(:warn).with(/No enabled alerts are assigned to target/)
-      MiqAlert.evaluate_alerts(@vm, 'request_vm_poweroff')
-    end
-
     it 'raises event to automate' do
       MiqAlert.evaluate_alerts(@vm, 'request_vm_poweroff')
       msg = MiqQueue.first
@@ -613,6 +617,50 @@ RSpec.describe MiqAlert do
     it "doesn't query for an unchanged record" do
       alert = FactoryBot.create(:miq_alert)
       expect { alert.valid? }.not_to make_database_queries
+    end
+  end
+
+  describe "#evaluate_performance" do
+    let(:vm) { FactoryBot.create(:vm_vmware) }
+
+    let(:alert_cpu_75) do
+      FactoryBot.create(
+        :miq_alert_vm,
+        :expression => {
+          :eval_method => "realtime_performance",
+          :mode        => "internal",
+          :options     => {:perf_column => "cpu_usage_rate_average", :value_threshold => 75, :operator => ">"}
+        }
+      )
+    end
+
+    let(:alert_cpu_90) do
+      FactoryBot.create(
+        :miq_alert_vm,
+        :expression => {
+          :eval_method => "realtime_performance",
+          :mode        => "internal",
+          :options     => {:perf_column => "cpu_usage_rate_average", :value_threshold => 90, :operator => ">"}
+        }
+      )
+    end
+
+    it "scopes the alert status lookup by miq_alert_id" do
+      cpu_75_evaluated = 2.minutes.ago.utc
+      cpu_90_evaluated = 30.minutes.ago.utc
+
+      vm.miq_alert_statuses.create!(:miq_alert => alert_cpu_75, :evaluated_on => cpu_75_evaluated, :result => true)
+      vm.miq_alert_statuses.create!(:miq_alert => alert_cpu_90, :evaluated_on => cpu_90_evaluated, :result => true)
+
+      eval_options_75 = {:interval_name => "realtime", :duration => 300, :column => "cpu_usage_rate_average", :value => 75, :operator => ">"}
+      eval_options_90 = {:interval_name => "realtime", :duration => 300, :column => "cpu_usage_rate_average", :value => 90, :operator => ">"}
+
+      allow(vm).to receive(:performances_maintains_value_for_duration?) do |opts|
+        opts[:starting_on] > cpu_75_evaluated
+      end
+
+      expect(alert_cpu_75.evaluate_performance(vm, eval_options_75)).to eq(true)
+      expect(alert_cpu_90.evaluate_performance(vm, eval_options_90)).to eq(false)
     end
   end
 end

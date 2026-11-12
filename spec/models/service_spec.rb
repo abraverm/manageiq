@@ -1,4 +1,6 @@
 RSpec.describe Service do
+  include Spec::Support::SupportsHelper
+
   include_examples "OwnershipMixin"
 
   context "service events" do
@@ -204,15 +206,25 @@ RSpec.describe Service do
     end
 
     describe "#v_total_vms" do
+      # @service -> [@vm]
+      #   \
+      #    @service_c1 -> [@vm1]
+      #      \
+      #       @service_c2 -> [@vm1, @vm2]
       it "sql" do
-        service = Service.select(:id, :v_total_vms).find_by(:id => @service.id)
-        expect(service.v_total_vms).to eq 4
-        expect(service.attribute_present?(:v_total_vms)).to eq true
+        # TODO: This is how rails 7.0 worked... not sure why v_total_vms is 1 for @service_c1!
+        [@service, 4, @service_c1, 1, @service_c2, 2].each_slice(2) do |expected, count|
+          actual = Service.select(:id, :v_total_vms).find_by(:id => expected.id)
+          expect(actual.v_total_vms).to eq count
+          expect(actual.attribute_present?(:v_total_vms)).to eq true
+        end
       end
 
       it "ruby" do
-        expect(@service.v_total_vms).to eq 4
-        expect(@service.attribute_present?(:v_total_vms)).to eq false
+        [@service, 4, @service_c1, 3, @service_c2, 2].each_slice(2) do |expected, count|
+          expect(expected.v_total_vms).to eq count
+          expect(expected.attribute_present?(:v_total_vms)).to eq false
+        end
       end
     end
 
@@ -426,6 +438,7 @@ RSpec.describe Service do
 
     describe ".queue_chargeback_reports" do
       before do
+        EvmSpecHelper.assign_role("reporting")
         @service_c1 = FactoryBot.create(:service, :service => @service)
         @service_c1.name = "Test_Service_2"
         @service_c1 << @vm1
@@ -458,6 +471,8 @@ RSpec.describe Service do
     end
 
     describe "#queue_chargeback_report_generation" do
+      before { EvmSpecHelper.assign_role("reporting") }
+
       it "queue request to generate chargeback report" do
         expect(MiqQueue).to receive(:put) do |args|
           expect(args).to include(:class_name  => described_class.name,
@@ -532,6 +547,32 @@ RSpec.describe Service do
       expect(@service.children).to be_empty
       expect(@service.composite?).to be_falsey
       expect(@service.atomic?).to be_truthy
+    end
+  end
+
+  describe "#v_total_direct_service_children" do
+    # create_deep_tree builds:
+    #   @service
+    #   +-- @service_c1
+    #   |   +-- @service_c11
+    #   |   +-- @service_c12
+    #   |       +-- @service_c121
+    #   +-- @service_c2
+    before { create_deep_tree }
+
+    it "sql" do
+      [[@service, 2], [@service_c1, 2], [@service_c2, 0]].each do |svc, count|
+        actual = Service.select(:id, :v_total_direct_service_children).find_by(:id => svc.id)
+        expect(actual.v_total_direct_service_children).to eq(count)
+        expect(actual.attribute_present?(:v_total_direct_service_children)).to eq(true)
+      end
+    end
+
+    it "ruby" do
+      [[@service, 2], [@service_c1, 2], [@service_c2, 0]].each do |svc, count|
+        expect(svc.v_total_direct_service_children).to eq(count)
+        expect(svc.attribute_present?(:v_total_direct_service_children)).to eq(false)
+      end
     end
   end
 
@@ -916,6 +957,7 @@ RSpec.describe Service do
     let(:ra) { FactoryBot.create(:resource_action, :dialog_id => 58, :ae_namespace => "foo", :ae_class => "bar", :ae_instance => "baz", :ae_attributes => {:service_action=>"reconfigure"}) }
 
     before do
+      stub_supports(service, :reconfigure)
       allow(DialogSerializer).to receive(:new).and_return(dialog_serializer)
       allow(dialog_serializer).to receive(:serialize).and_return("serialized_reconfigure_dialog")
       allow(ResourceActionWorkflow).to receive(:new).and_return(workflow)
@@ -933,7 +975,7 @@ RSpec.describe Service do
     end
 
     it "serializes the dialog returned by the workflow with all attributes" do
-      expect(dialog_serializer).to receive(:serialize).with(Array["workflow_dialog"], true)
+      expect(dialog_serializer).to receive(:serialize).with(["workflow_dialog"], true)
       service.reconfigure_dialog
     end
 

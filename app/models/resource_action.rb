@@ -4,7 +4,7 @@ class ResourceAction < ApplicationRecord
   belongs_to :configuration_script_payload, :foreign_key => :configuration_script_id
   belongs_to :dialog
 
-  serialize  :ae_attributes, Hash
+  serialize  :ae_attributes, :type => Hash
 
   validate :ensure_configuration_script_or_automate
 
@@ -90,8 +90,7 @@ class ResourceAction < ApplicationRecord
     else
       MiqAeEngine.deliver_queue(automate_queue_hash(target, dialog_hash_values[:dialog], user, task_id),
                                 :zone     => target.try(:my_zone),
-                                :priority => MiqQueue::HIGH_PRIORITY,
-                                :task_id  => "#{self.class.name.underscore}_#{id}")
+                                :priority => MiqQueue::HIGH_PRIORITY)
     end
   end
 

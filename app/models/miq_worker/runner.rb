@@ -266,7 +266,6 @@ class MiqWorker::Runner
     Vmdb::Settings.reload!
     @my_zone ||= MiqServer.my_zone
     sync_worker_settings
-    sync_blacklisted_events
     after_sync_config
 
     _log.info("ID [#{@worker.id}], PID [#{Process.pid}], GUID [#{@worker.guid}], Zone [#{@my_zone}], Active Roles [#{@active_roles.join(',')}], Assigned Roles [#{MiqServer.my_role}], Configuration:")
@@ -402,9 +401,6 @@ class MiqWorker::Runner
   def before_exit(_message, _exit_code)
   end
 
-  def sync_blacklisted_events
-  end
-
   #
   # Polling methods
   #
@@ -436,7 +432,7 @@ class MiqWorker::Runner
     ObjectSpace.each_object(Object) do |obj|
       next unless defined?(obj.class)
 
-      types[obj.class.name] += 1
+      types[obj.class.to_s] += 1
     end
     types
   end
@@ -508,6 +504,7 @@ class MiqWorker::Runner
   def worker_env
     {
       "APP_ROOT"              => Rails.root.to_s,
+      "BUNDLE_GEMFILE"        => Rails.root.join("Gemfile").to_s,
       "GUID"                  => @worker.guid,
       "WORKER_HEARTBEAT_FILE" => @worker.heartbeat_file
     }

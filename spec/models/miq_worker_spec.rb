@@ -132,6 +132,14 @@ RSpec.describe MiqWorker do
   end
 
   describe ".rails_worker?" do
+    before do
+      @rails_worker = described_class.rails_worker
+    end
+
+    after do
+      described_class.rails_worker = @rails_worker
+    end
+
     it "defaults to true" do
       expect(described_class.rails_worker?).to be_truthy
     end

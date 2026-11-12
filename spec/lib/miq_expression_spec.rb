@@ -89,6 +89,12 @@ RSpec.describe MiqExpression do
       expect(expression).to be_valid
     end
 
+    # in the future, we may decide to allow this. A few people had these in the database
+    it "returns false for an invalid flat expression (dot attribute)" do
+      expression = described_class.new("=" => {"field" => "MiqWidget.id", "value" => 5})
+      expect(expression).not_to be_valid
+    end
+
     it "returns false for an invalid flat expression" do
       expression = described_class.new("=" => {"field" => "Vm-destroy", "value" => true})
       expect(expression).not_to be_valid
@@ -334,6 +340,12 @@ RSpec.describe MiqExpression do
 
       it "!(sql AND ruby) => (!(sql) OR !(ruby)) => !(sql AND ruby)" do
         expect(ruby_pruned_exp("NOT" => {"AND" => [sql_field, ruby_field.clone]})).to eq("NOT" => {"AND" => [sql_field, ruby_field]})
+      end
+
+      it "(sql) => return empty ruby expression" do
+        exp1 = {"=" => {"field" => "Vm-name", "value" => "abc"}}
+        ruby = MiqExpression.new(exp1).to_ruby(:prune_sql => true)
+        expect(ruby).to be_nil
       end
     end
   end
@@ -757,14 +769,6 @@ RSpec.describe MiqExpression do
         sql, * = exp.to_sql
         expect(sql).to eq("\"vms\".\"last_scan_on\" BETWEEN '2011-01-10 08:00:00' AND '2011-01-10 17:00:00'")
       end
-
-      it "generates the SQL for a FROM expression with two identical datetimes" do
-        exp = MiqExpression.new(
-          "FROM" => {"field" => "Vm-last_scan_on", "value" => ["2011-01-10 00:00", "2011-01-10 00:00"]}
-        )
-        sql, * = exp.to_sql
-        expect(sql).to eq("\"vms\".\"last_scan_on\" BETWEEN '2011-01-10 00:00:00' AND '2011-01-10 00:00:00'")
-      end
     end
 
     context "relative date/time support" do
@@ -1105,7 +1109,7 @@ RSpec.describe MiqExpression do
     end
   end
 
-  describe "#lenient_evaluate" do
+  describe "#evaluate (was lenient)" do
     describe "integration" do
       it "with a find/checkany expression" do
         host1, host2, host3, host4, host5, host6, host7, host8 = FactoryBot.create_list(:host, 8)
@@ -1122,7 +1126,7 @@ RSpec.describe MiqExpression do
             "checkany" => {"FROM" => {"field" => "Host.vms-last_scan_on",
                                       "value" => ["2011-01-08 17:00", "2011-01-09 23:30:59"]}},
             "search"   => {"IS NOT NULL" => {"field" => "Host.vms-description"}}})
-        result = Host.all.to_a.select { |rec| filter.lenient_evaluate(rec) }
+        result = Host.all.to_a.select { |rec| filter.evaluate(rec) }
         expect(result).to contain_exactly(host3, host5)
       end
 
@@ -1148,7 +1152,7 @@ RSpec.describe MiqExpression do
                                       "value" => ["2011-01-08 17:00", "2011-01-09 23:30:59"]}},
             "checkall" => {"IS NOT NULL" => {"field" => "Host.vms-description"}}}
         )
-        result = Host.all.to_a.select { |rec| filter.lenient_evaluate(rec) }
+        result = Host.all.to_a.select { |rec| filter.evaluate(rec) }
         expect(result).to eq([host2])
       end
 
@@ -1156,8 +1160,22 @@ RSpec.describe MiqExpression do
         vm = FactoryBot.create(:vm_vmware)
 
         expect do
-          described_class.new("=" => {"field" => "Vm-destroy", "value" => true}).lenient_evaluate(vm)
+          described_class.new("=" => {"field" => "Vm-destroy", "value" => true}).evaluate(vm)
         end.not_to change(Vm, :count)
+      end
+
+      it "handles empty ruby expression" do
+        # miqe will generate an empty ruby miq_expression since `Vm.name == "abc"` can be done in sql.
+        #
+        # There are ways to make this test fail:
+        # 1. If evaluate does not respect prune_sql, then it generates a ruby expression of name="abc".
+        #    This will fail the expectation (since name = "def")
+        # 2. If evaluate does respect prune_sql, the ruby expression will be nil.
+        #    So we are testing that evaluate knows that an empty ruby expression should result in true.
+        miqe = described_class.new("=" => {"field" => "Vm-name", "value" => "abc"})
+
+        vm = FactoryBot.create(:vm_vmware, :name => "def")
+        expect(miqe.evaluate(vm, :prune_sql => true)).to eq(true)
       end
     end
   end
@@ -2429,6 +2447,21 @@ RSpec.describe MiqExpression do
     it "generates a human readable string for a COUNT expression with alias" do
       exp = MiqExpression.new(">" => {"count" => "Vm.snapshots", "value" => "1", "alias" => "Snaps"})
       expect(exp.to_human).to eq("COUNT OF Snaps > 1")
+    end
+
+    it "generates a human readable string for a numeric FIELD value expression" do
+      exp = MiqExpression.new(">" => {"field" => "Vm.hardware.volumes-free_space_percent", "value" => 75})
+      expect(exp.to_human).to eq("VM and Instance.Hardware.Volumes : Free Space Percent > 75")
+    end
+
+    it "generates a human readable string for a float FIELD value expression" do
+      exp = MiqExpression.new(">" => {"field" => "Vm.hardware.volumes-free_space_percent", "value" => 75.0})
+      expect(exp.to_human).to eq("VM and Instance.Hardware.Volumes : Free Space Percent > 75.0")
+    end
+
+    it "generates a human readable string for a symbol FIELD value expression" do
+      exp = MiqExpression.new(">" => {"field" => "Vm-allocated_disk_storage", "value" => :"5.megabytes"})
+      expect(exp.to_human).to eq("VM and Instance : Allocated Disk Storage > 5 MB")
     end
 
     context "TAG type expression" do

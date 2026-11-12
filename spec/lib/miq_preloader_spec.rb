@@ -1,6 +1,7 @@
 RSpec.describe MiqPreloader do
   # implied vms (simple association)
   let(:ems) { FactoryBot.create(:ems_infra).tap { |ems| FactoryBot.create_list(:vm, 2, :ext_management_system => ems) } }
+  let(:zone) { FactoryBot.create(:zone) }
 
   # implied container_nodes (through association)
   let(:image) do
@@ -45,21 +46,21 @@ RSpec.describe MiqPreloader do
       FactoryBot.create_list(:vm, 2, :ext_management_system => ems)
       emses = ExtManagementSystem.all.load
       vms   = Vm.where(:ems_id => emses.select(:id))
-      expect { preload(emses, :vms, vms) }.to make_database_queries(:count => 1)
 
+      expect { preload(emses, :vms, vms) }.to make_database_queries(:count => 1)
       expect { expect(emses.first.vms.size).to eq(2) }.not_to make_database_queries
     end
 
     # original behavior - not calling our code
     it "preloads with an unloaded simple relation" do
       vms = Vm.where(:ems_id => ems.id)
-      vms2 = vms.order(:id).to_a # preloaded vms to be used in tests
+      vms2 = vms.order(:id).load # preloaded vms to be used in tests
 
-      # there is a query for every ems
       expect { preload(ems, :vms, vms) }.to make_database_queries(:count => 1)
+
       expect { preload(ems, :vms, vms) }.not_to make_database_queries
       expect { expect(ems.vms).to match_array(vms2) }.not_to make_database_queries
-      # vms does not get loaded, so it is not preloaded
+
       expect { expect(vms.first.ext_management_system).to eq(ems) }.to make_database_queries(:count => 2)
     end
 
@@ -67,33 +68,24 @@ RSpec.describe MiqPreloader do
       ems
       emses = ExtManagementSystem.all.load
       vms   = Vm.where(:ems_id => emses.select(:id)).load
-      expect { preload(emses, :vms, vms) }.not_to make_database_queries
+
+      expect { preload(emses, :vms, vms) }.to make_database_queries(:count => 1)
 
       expect { preload(emses, :vms, vms) }.not_to make_database_queries
       expect { expect(emses.first.vms.size).to eq(2) }.not_to make_database_queries
-      expect { expect(vms.first.ext_management_system).to eq(ems) }.not_to make_database_queries
+
+      # TODO: With rails 7, the query count below increased by 1.
+      expect { expect(vms.first.ext_management_system).to eq(ems) }.to make_database_queries(:count => 1)
     end
 
-    it "preloads with an array (records is a relation)" do
-      ems
-      emses = ExtManagementSystem.all.load
-      vms = Vm.where(:ems_id => emses.select(:id)).to_a
-      expect { preload(emses, :vms, vms) }.not_to make_database_queries
+    it "preloads singular association with a loaded relation (records is a relation)" do
+      emses = ExtManagementSystem.select(:id).where(:id => ems.id).load
+      vms = Vm.where(:ems_id => emses.select(:id)).load
+      preload(vms, :ext_management_system, emses)
 
-      expect { preload(emses, :vms, vms) }.not_to make_database_queries
-      expect { expect(emses.first.vms.size).to eq(2) }.not_to make_database_queries
-      expect { expect(vms.first.ext_management_system).to eq(ems) }.not_to make_database_queries
-    end
-
-    it "preloads with an array (records is an array)" do
-      ems
-      emses = ExtManagementSystem.all.load.to_a
-      vms   = Vm.where(:ems_id => emses.map(&:id)).to_a
-      expect { preload(emses, :vms, vms) }.not_to make_database_queries
-
-      expect { preload(emses, :vms, vms) }.not_to make_database_queries
-      expect { expect(emses.first.vms.size).to eq(2) }.not_to make_database_queries
-      expect { expect(vms.first.ext_management_system).to eq(ems) }.not_to make_database_queries
+      expect { preload(vms, :ext_management_system, emses) }.not_to make_database_queries
+      expect { expect(vms.size).to eq(2) }.not_to make_database_queries
+      expect { expect(vms.first.ext_management_system).to eq(emses.first) }.not_to make_database_queries
     end
 
     it "preloads a through with a loaded scope" do
@@ -109,8 +101,21 @@ RSpec.describe MiqPreloader do
       expect { expect(nodes.first.container_images).to eq([image]) }.to make_database_queries(:count => 1)
     end
 
-    def preload(*args)
-      MiqPreloader.preload(*args)
+    it "preloads association array" do
+      host = FactoryBot.create(:host_vmware) # infra
+      FactoryBot.create_list(:vm, 2, :ext_management_system => FactoryBot.create(:ems_infra, :zone => zone), :host => host)
+      emses = ExtManagementSystem.all
+
+      # 4: ems, zones, vms, hosts
+      expect { preload(emses, [:zone, :vms => :host]) }.to make_database_queries(:count => 4)
+
+      expect { expect(emses.first.vms.size).to eq(2) }.not_to make_database_queries
+      expect { expect(emses.first.vms.first.host).to eq(host) }.not_to make_database_queries
+      expect { expect(emses.first.zone).to eq(zone) }.not_to make_database_queries
+    end
+
+    def preload(*args, **kwargs)
+      MiqPreloader.preload(*args, **kwargs)
     end
   end
 

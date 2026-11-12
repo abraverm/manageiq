@@ -2,9 +2,7 @@ class Zone < ApplicationRecord
   validates_presence_of   :name, :description
   validates :name, :unique_within_region => true
 
-  serialize :settings, Hash
-
-  belongs_to :log_file_depot, :class_name => "FileDepot"
+  serialize :settings, :type => Hash
 
   has_many :miq_servers
   has_many :ext_management_systems
@@ -144,34 +142,6 @@ class Zone < ApplicationRecord
     end
   end
 
-  def synchronize_logs(*args)
-    options = args.extract_options!
-    enabled = Settings.log.collection.include_automate_models_and_dialogs
-
-    active_miq_servers.each_with_index do |s, index|
-      # If enabled, export the automate domains and dialogs on the first active server
-      include_models_and_dialogs = enabled ? index.zero? : false
-      s.synchronize_logs(*args, options.merge(:include_automate_models_and_dialogs => include_models_and_dialogs))
-    end
-  end
-
-  def last_log_sync_on
-    miq_servers.inject(nil) do |d, s|
-      last = s.last_log_sync_on
-      d ||= last
-      d = last if last && last > d
-      d
-    end
-  end
-
-  def log_collection_active?
-    miq_servers.any?(&:log_collection_active?)
-  end
-
-  def log_collection_active_recently?(since = nil)
-    miq_servers.any? { |s| s.log_collection_active_recently?(since) }
-  end
-
   def self.hosts_without_a_zone
     Host.where(:ems_id => nil).to_a
   end
@@ -190,10 +160,6 @@ class Zone < ApplicationRecord
 
   def ems_datawarehouses
     ext_management_systems.select { |e| e.kind_of?(ManageIQ::Providers::DatawarehouseManager) }
-  end
-
-  def ems_monitors
-    ext_management_systems.select { |e| e.kind_of?(ManageIQ::Providers::MonitoringManager) }
   end
 
   def ems_configproviders

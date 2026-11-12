@@ -49,7 +49,7 @@ class EmsCluster < ApplicationRecord
   include FilterableMixin
 
   include DriftStateMixin
-  virtual_delegate :last_scan_on, :to => "last_drift_state_timestamp_rec.timestamp", :allow_nil => true, :type => :datetime
+  virtual_attribute :last_scan_on, :datetime, :through => :last_drift_state_timestamp_rec, :source => :timestamp
 
   include RelationshipMixin
   self.default_relationship_type = "ems_metadata"
@@ -204,6 +204,12 @@ class EmsCluster < ApplicationRecord
     cond_params
   end
 
+  # TODO: ems_events already exists as a method but it uses
+  # event_where_clause which tacks on additional possibly expensive queries
+  # such as all events for all hosts or vms in the cluster.
+  # Should we move to looking at ems events specifically for the ems cluster?
+  # like this:
+  #   has_many :ems_events, :foreign_key => :ems_cluster_id
   def ems_events
     ewc = event_where_clause
     return [] if ewc.blank?

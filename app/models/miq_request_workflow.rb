@@ -514,22 +514,6 @@ class MiqRequestWorkflow
     end
   end
 
-  def retrieve_ldap(_options = {})
-    email = get_value(@values[:owner_email])
-    if email.present?
-      l = MiqLdap.new
-      if l.bind_with_default == true
-        raise _("No information returned for %{email}") % {:email => email} if (d = l.get_user_info(email, "mail")).nil?
-
-        [:first_name, :last_name, :address, :city, :state, :zip, :country, :title, :company,
-         :department, :office, :phone, :phone_mobile, :manager, :manager_mail, :manager_phone].each do |prop|
-          @values["owner_#{prop}".to_sym] = d[prop].try(:dup)
-        end
-        @values[:sysprep_organization] = d[:company].try(:dup)
-      end
-    end
-  end
-
   def default_schedule_time(options = {})
     # TODO: Added support for "default_from", like values_from, that gets called once after dialog creation
     # Update VM description
@@ -759,11 +743,7 @@ class MiqRequestWorkflow
 
     if get_value(@values[:owner_email]).blank? && @requester.email.present?
       @values[:owner_email] = @requester.email
-      retrieve_ldap if MiqLdap.using_ldap?
     end
-
-    show_flag = MiqLdap.using_ldap? ? :show : :hide
-    show_fields(show_flag, [:owner_load_ldap])
   end
 
   def set_request_values(values)
@@ -1465,16 +1445,6 @@ class MiqRequestWorkflow
     values[:auto_approve] = data.delete(:auto_approve) == 'true'
     data.delete(:user_name)
 
-    # get owner values from LDAP if configured
-    if data[:owner_email].present? && MiqLdap.using_ldap?
-      email = data[:owner_email]
-      unless email.include?('@')
-        email = "#{email}@#{::Settings.authentication.user_suffix}"
-      end
-      values[:owner_email] = email
-      retrieve_ldap rescue nil
-    end
-
     dlg_keys = dlg_fields.keys
     data.keys.each do |key|
       if dlg_keys.include?(key)
@@ -1507,9 +1477,9 @@ class MiqRequestWorkflow
   def raise_validate_errors
     errors = []
     fields { |_fn, f, _dn, _d| errors << f[:error] unless f[:error].nil? }
-    err_text = "Provision failed for the following reasons:\n#{errors.join("\n")}"
-    _log.error("<#{err_text}>")
-    raise _("Provision failed for the following reasons:\n%{errors}") % {:errors => errors.join("\n")}
+    err_text = errors.join("\n").insert(0, "\n")
+    _log.error("<Provision failed for the following reasons:#{err_text}>")
+    raise _("Provision failed for the following reasons:%{errors}") % {:errors => err_text}
   end
 
   private

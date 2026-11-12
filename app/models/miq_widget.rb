@@ -21,7 +21,7 @@ class MiqWidget < ApplicationRecord
 
   validates_presence_of   :title, :description
   validates :description, :uniqueness_when_changed => true
-  VALID_CONTENT_TYPES = %w[report chart rss menu]
+  VALID_CONTENT_TYPES = %w[report chart menu]
   validates_inclusion_of :content_type, :in => VALID_CONTENT_TYPES, :message => "should be one of #{VALID_CONTENT_TYPES.join(", ")}"
 
   serialize :visibility
@@ -52,8 +52,8 @@ class MiqWidget < ApplicationRecord
   end
 
   virtual_column :status,         :type => :string,    :uses => :miq_task
-  virtual_delegate :status_message, :to => "miq_task.message", :allow_nil => true, :default => "Unknown", :type => :string
-  virtual_delegate :queued_at, :to => "miq_task.created_on", :allow_nil => true, :type => :datetime
+  virtual_attribute :status_message, :string, :through => :miq_task, :source => :message, :default => "Unknown"
+  virtual_attribute :queued_at, :datetime, :through => :miq_task, :source => :created_on
   virtual_column :last_run_on,    :type => :datetime,  :uses => :miq_schedule
 
   def row_count(row_count_param = nil)
@@ -372,19 +372,23 @@ class MiqWidget < ApplicationRecord
   def contents_for_user(user)
     user = self.class.get_user(user)
     timezone = timezone_matters? ? user.get_timezone : "UTC"
-    conditions = {:miq_group_id => user.current_group.id}
-    conditions[:user_id] = user.id
-    conditions[:timezone] = timezone
-    contents = miq_widget_contents.find_by(conditions)
+    group_id = user.current_group.id
 
-    conditions.delete(:user_id)
-    contents ||= miq_widget_contents.find_by(conditions)
+    # Fetch all possible content records in a single query
+    possible_contents = miq_widget_contents.where(:miq_group_id => group_id)
 
+    # Try to find exact match (user + timezone)
+    contents = possible_contents.detect { |c| c.user_id == user.id && c.timezone == timezone }
+
+    # Fallback to group + timezone (no specific user)
+    contents ||= possible_contents.detect { |c| c.user_id.nil? && c.timezone == timezone }
+
+    # Fallback to any timezone for this group
     if contents.nil?
       _log.warn("No contents found for Widget: '#{title}' Group: #{user.current_group.description} in Timezone '#{timezone}'. Attempting to get widget's contents from any Timezone ...")
-      conditions.delete(:timezone)
-      contents = miq_widget_contents.find_by(conditions)
+      contents = possible_contents.detect { |c| c.user_id.nil? }
     end
+
     contents
   end
 
@@ -397,8 +401,13 @@ class MiqWidget < ApplicationRecord
 
   def grouped_users_by_id
     id_groups = Hash.new { |h, k| h[k] = [] }
+    group_ids = MiqGroup.in_my_region.pluck(:id)
     memberof.compact.each_with_object(id_groups) do |ws, h|
-      h[ws.group_id] << ws.userid unless ws.userid.blank? || ws.group_id.blank?
+      next if ws.userid.blank?
+      next if ws.group_id.blank?
+      next unless group_ids.include?(ws.group_id)
+
+      h[ws.group_id] << ws.userid
     end
   end
 
@@ -415,26 +424,26 @@ class MiqWidget < ApplicationRecord
   def available_for_group?(group)
     return false unless group
 
-    has_visibility?(:roles, group.miq_user_role_name) || has_visibility?(:groups, group.description)
+    has_visibility?(:roles, group.entitlement&.miq_user_role_id) || has_visibility?(:groups, group.id)
   end
 
   def self.available_for_user(user)
     user = get_user(user)
-    role = user.miq_user_role_name
-    group = user.current_group.description
+    role_id = user.current_group&.entitlement&.miq_user_role_id
+    group_id = user.current_group&.id
 
     # Return all widgets that either has this user's role or is allowed for all roles, or has this user's group
     all.select do |w|
-      w.has_visibility?(:roles, role) || w.has_visibility?(:groups, group)
+      w.has_visibility?(:roles, role_id) || w.has_visibility?(:groups, group_id)
     end
   end
 
   def self.available_for_group(group)
     group = get_group(group)
-    role = group.miq_user_role_name
+    role_id = group&.entitlement&.miq_user_role_id
     # Return all widgets that either has this group's role or is allowed for all roles.
     all.select do |w|
-      w.has_visibility?(:roles, role) || w.has_visibility?(:groups, group.description)
+      w.has_visibility?(:roles, role_id) || w.has_visibility?(:groups, group&.id)
     end
   end
 
@@ -443,7 +452,26 @@ class MiqWidget < ApplicationRecord
   end
 
   def has_visibility?(key, value)
-    visibility.kind_of?(Hash) && visibility.key?(key) && (visibility[key].include?(value) || visibility[key].include?("_ALL_"))
+    return false unless visibility.kind_of?(Hash) && visibility.key?(key)
+
+    vals = Array.wrap(visibility[key])
+    vals.include?(value) || vals.include?("_ALL_")
+  end
+
+  def visibility_values
+    return [] unless visibility.kind_of?(Hash)
+
+    typ = visibility.keys.first
+    values = visibility.values.flatten
+    return [] if typ.blank? || values.blank?
+
+    # Convert ids to useful strings for display
+    case typ
+    when :roles
+      MiqUserRole.where(:id => values).pluck(:name)
+    when :groups
+      MiqGroup.where(:id => values).pluck(:description)
+    end
   end
 
   def self.get_user(user)

@@ -71,6 +71,7 @@ RSpec.describe EmsEvent do
     let(:vm) { FactoryBot.create(:vm_openstack, :ems_ref => "vm1") }
     before do
       @zone = FactoryBot.create(:small_environment)
+      EvmSpecHelper.local_miq_server(:is_master => true, :zone => @zone)
       @ems  = @zone.ext_management_systems.first
       @availability_zone = FactoryBot.create(:availability_zone_openstack, :ems_ref => "az1")
     end
@@ -228,6 +229,7 @@ RSpec.describe EmsEvent do
             :args        => [event_hash],
           }
 
+          expect(MiqQueue).to receive(:messaging_client).with('event_handler').and_return(nil)
           expect(MiqQueue).to receive(:submit_job).with(expected_queue_payload)
 
           described_class.add_queue('add', ems.id, event_hash)

@@ -30,7 +30,6 @@ class MiqTask < ApplicationRecord
   MESSAGE_TASK_COMPLETED_SUCCESSFULLY   = 'Task completed successfully'.freeze
   MESSAGE_TASK_COMPLETED_UNSUCCESSFULLY = 'Task did not complete successfully'.freeze
 
-  has_one :log_file, :dependent => :destroy
   has_one :binary_blob, :as => :resource, :dependent => :destroy
   has_one :miq_report_result
   has_one :job, :dependent => :destroy
@@ -62,7 +61,7 @@ class MiqTask < ApplicationRecord
   scope :completed_warn,          ->           { finished.where(:status => 'Warn') }
   scope :completed_error,         ->           { finished.where(:status => 'Error') }
   scope :no_status_selected,      ->           { running.where.not(:status => %(Ok Error Warn)) }
-  scope :with_status_in,          ->(s, *rest) { rest.reduce(MiqTask.send(s)) { |chain, r| chain.or(MiqTask.send(r)) } }
+  scope :with_status_in,          ->(*scopes) { merge(scopes.collect { |s| MiqTask.unscoped.send(s) }.inject(:or)) }
 
   def ensure_started
     self.started_on ||= Time.now.utc if state == STATE_ACTIVE
@@ -252,8 +251,6 @@ class MiqTask < ApplicationRecord
   end
 
   def task_results
-    # support legacy task that saved results in the results column
-    return Marshal.load(Base64.decode64(results.split("\n").join)) unless results.nil?
     return miq_report_result.report_results unless miq_report_result.nil?
 
     if binary_blob

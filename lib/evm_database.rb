@@ -1,3 +1,5 @@
+require "benchmark"
+
 class EvmDatabase
   include Vmdb::Logging
 
@@ -32,7 +34,6 @@ class EvmDatabase
     ChargebackRate
     ServiceTemplateCatalog
 
-    BlacklistedEvent
     Classification
     CustomizationTemplate
     Dialog
@@ -150,7 +151,7 @@ class EvmDatabase
   private_class_method :seed_classes
 
   def self.host
-    (ActiveRecord::Base.configurations[ENV['RAILS_ENV']] || {})['host']
+    ActiveRecord::Base.configurations.find_db_config(Rails.env).host
   end
 
   def self.local?
